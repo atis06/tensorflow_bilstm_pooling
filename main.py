@@ -196,14 +196,13 @@ def train_model():
               format(epoch + 1, loss_valid, acc_valid))
         print('---------------------------------------------------------')
 
-
+        X_batch = X_batch.reshape((1, num_time_steps, num_inputs))
         if use_embedding_layer:
-            X_batch = X_batch.reshape((1, num_time_steps, num_inputs))
+            X_batch = X_batch.reshape((1, num_time_steps))
+            y_batch = tf.one_hot(y_batch - 1, num_classes, axis=-1).eval().reshape(-1, num_classes)
         else:
             X_batch, y_batch = next_batch(1, train_padded, training_label_seq)
-        X_batch = X_batch.reshape((1, num_time_steps))
-        y_batch = tf.one_hot(y_batch - 1, num_classes, axis=-1).eval().reshape(-1, num_classes)
-
+        
         feed_dict = {model.X: X_batch, model.y: y_batch}
         print(np.argmax(sess.run(model.y, feed_dict)) == np.argmax(y_batch))
 
