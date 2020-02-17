@@ -169,6 +169,6 @@ def train_model():
         print('---------------------------------------------------------')
 
         feed_dict = {model.X: X_batch[0], model.y: y_batch[0]}
-        print(tf.run(model.y, feed_dict))
+        print(sess.run(model.y, feed_dict))
 
 train_model()
