@@ -2,25 +2,23 @@ import tensorflow as tf
 
 class BiRNNWithPooling:
 
-    def __init__(self):
+
+
+    def __init__(self, num_inputs, num_time_steps, num_hidden, learning_rate, num_classes, dropout_keep_prob, pooling):
         # Just one feature, the time series(embeddig dim)
-        self.num_inputs = 300
+        self.num_inputs = num_inputs
         # Num of steps in each batch (seqlength)
-        self.num_time_steps = 200
+        self.num_time_steps = num_time_steps
         # Hidden neurons in each rnn layer
-        self.num_hidden = 200
+        self.num_hidden = num_hidden
         # Learning rate you can play with this
-        self.learning_rate = 0.001
-        # How many iterations to go through (training steps)
-        self.epochs = 200
-        # Size of the batch of data
-        self.batch_size = 100
+        self.learning_rate = learning_rate
         # Num of classes
-        self.n_classes = 5
-        # Dropout keep probability
-        self.dropout_keep_prob = 0.8
+        self.num_classes = num_classes
+        # Dropout keep probability (can be None)
+        self.dropout_keep_prob = dropout_keep_prob
         # Pooling (max, avg, None)
-        self.pooling = 'max'
+        self.pooling = pooling
 
         self.X, self.y = self.__init_placeholders()
 
@@ -30,13 +28,13 @@ class BiRNNWithPooling:
 
     def __init_placeholders(self):
         X = tf.placeholder(tf.float32, [None, self.num_time_steps, self.num_inputs])
-        y = tf.placeholder(tf.float32, [None, self.n_classes])
+        y = tf.placeholder(tf.float32, [None, self.num_classes])
 
         return X, y
 
     def __init_variables(self):
-        W = tf.Variable(tf.random_normal(shape=[2 * self.num_hidden, self.n_classes]))
-        b = tf.Variable(tf.zeros([self.n_classes]))
+        W = tf.Variable(tf.random_normal(shape=[2 * self.num_hidden, self.num_classes]))
+        b = tf.Variable(tf.zeros([self.num_classes]))
 
         return W, b
 
