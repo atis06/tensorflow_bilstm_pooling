@@ -2,8 +2,6 @@ import tensorflow as tf
 
 class BiRNNWithPooling:
 
-
-
     def __init__(self, num_inputs, num_time_steps, num_hidden, learning_rate, num_classes, dropout_keep_prob, pooling):
         # Just one feature, the time series(embeddig dim)
         self.num_inputs = num_inputs
@@ -34,13 +32,13 @@ class BiRNNWithPooling:
 
     def __init_variables(self):
         W = tf.Variable(tf.random_normal(shape=[2 * self.num_hidden, self.num_classes]))
-        b = tf.Variable(tf.zeros([self.num_classes]))
+        b = tf.Variable(tf.ones([self.num_classes]))
 
         return W, b
 
     def __biRNN(self, input):
-        fw_cell = tf.contrib.rnn.BasicLSTMCell(self.num_hidden, forget_bias=1.0)
-        bw_cell = tf.contrib.rnn.BasicLSTMCell(self.num_hidden, forget_bias=1.0)
+        fw_cell = tf.nn.rnn_cell.LSTMCell(self.num_hidden, forget_bias=1.0)
+        bw_cell = tf.nn.rnn_cell.LSTMCell(self.num_hidden, forget_bias=1.0)
 
         if self.dropout_keep_prob is not None:
                 fw_cell=tf.contrib.rnn.DropoutWrapper(fw_cell,output_keep_prob=self.dropout_keep_prob)
@@ -72,7 +70,7 @@ class BiRNNWithPooling:
 
 
     def __loss(self, output_logits, y):
-        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=output_logits))
+        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=output_logits))
         return loss
 
     def __accuracy(self, output_logits, y):
