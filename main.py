@@ -29,6 +29,9 @@ min_count = 2
 iter = 5
 epochs = 15
 
+# Network training parameters
+net_epochs = 150
+
 
 def preprocess_data():
     articles = []
@@ -139,7 +142,7 @@ def train_model():
 
     with tf.Session() as sess:
         sess.run(init)
-        for epoch in range(epochs):
+        for epoch in range(net_epochs):
             X_batch, y_batch = next_batch(model.batch_size, train_articles_w2v, training_label_seq)
 
             X_batch = X_batch.reshape((model.batch_size, model.num_time_steps, model.num_inputs))
