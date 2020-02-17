@@ -142,6 +142,10 @@ def train_model():
 
     with tf.Session() as sess:
         sess.run(init)
+        X_batch, y_batch = next_batch(model.batch_size, train_articles_w2v, training_label_seq)
+
+        X_batch = X_batch.reshape((model.batch_size, model.num_time_steps, model.num_inputs))
+        y_batch = tf.one_hot(y_batch - 1, model.n_classes, axis=-1).eval().reshape(-1, model.n_classes)
         for epoch in range(net_epochs):
             X_batch, y_batch = next_batch(model.batch_size, train_articles_w2v, training_label_seq)
 
@@ -168,7 +172,12 @@ def train_model():
               format(epoch + 1, loss_valid, acc_valid))
         print('---------------------------------------------------------')
 
-        feed_dict = {model.X: X_batch[0], model.y: y_batch[0]}
-        print(sess.run(model.y, feed_dict))
+        X_batch, y_batch = next_batch(1, train_articles_w2v, training_label_seq)
+
+        X_batch = X_batch.reshape((1, model.num_time_steps, model.num_inputs))
+        y_batch = tf.one_hot(y_batch - 1, model.n_classes, axis=-1).eval().reshape(-1, model.n_classes)
+
+        feed_dict = {model.X: X_batch, model.y: y_batch}
+        print(np.argmax(sess.run(model.y, feed_dict)) == np.argmax(y_batch))
 
 train_model()
