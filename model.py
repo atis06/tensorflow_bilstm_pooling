@@ -68,7 +68,7 @@ class BiRNNWithPooling:
 
     def __dense_layer(self, input, weights, biases):
         output_logits = tf.matmul(input, weights) + biases
-        y_pred = tf.nn.softmax(output_logits)
+        #y_pred = tf.nn.softmax(output_logits)
 
         return output_logits
 
@@ -85,6 +85,7 @@ class BiRNNWithPooling:
 
     def __optimizer(self, loss):
         optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(loss)
+
         return optimizer
 
     def __get_network(self):
