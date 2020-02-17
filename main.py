@@ -68,12 +68,12 @@ def preprocess_data():
     tokenizer.fit_on_texts(train_articles)
     word_index = tokenizer.word_index
 
+
     train_sequences = tokenizer.texts_to_sequences(train_articles)
-    train_padded = pad_sequences(train_sequences, maxlen=max_length, padding=padding_type, truncating=trunc_type)
+    train_padded = np.asarray(pad_sequences(train_sequences, maxlen=max_length, padding=padding_type, truncating=trunc_type), dtype='int32')
 
     validation_sequences = tokenizer.texts_to_sequences(validation_articles)
-    validation_padded = pad_sequences(validation_sequences, maxlen=max_length, padding=padding_type,
-                                      truncating=trunc_type)
+    validation_padded = np.asarray(pad_sequences(validation_sequences, maxlen=max_length, padding=padding_type, truncating=trunc_type), dtype='int32')
 
     label_tokenizer = Tokenizer()
     label_tokenizer.fit_on_texts(labels)
@@ -98,6 +98,14 @@ def train_w2v(articles):
 
     return model
 
+def get_embedding_matrix(w2v_model):
+    embedding_matrix = np.zeros((len(w2v_model.wv.vocab), w2v_dim))
+    for i in range(len(w2v_model.wv.vocab)):
+        embedding_vector = w2v_model.wv[w2v_model.wv.index2word[i]]
+        if embedding_vector is not None:
+            embedding_matrix[i] = embedding_vector
+
+    return embedding_matrix
 
 def apply_w2v(model, train_padded, validation_padded, reverse_word_index):
     train_articles_w2v = []
@@ -145,19 +153,20 @@ def train_model():
     train_articles_w2v, validation_articles_w2v = apply_w2v(w2v_model, train_padded, validation_padded,
                                                             reverse_word_index)
 
-    model = BiRNNWithPooling(num_inputs, num_time_steps, num_hidden, learning_rate, num_classes, dropout_keep_prob, pooling)
+    embedding_matrix = get_embedding_matrix(w2v_model)
+
+    model = BiRNNWithPooling(num_inputs, num_time_steps, num_hidden, learning_rate, num_classes, dropout_keep_prob, pooling, embedding_matrix)
     init = tf.global_variables_initializer()
+
 
     with tf.Session() as sess:
         sess.run(init)
-        X_batch, y_batch = next_batch(batch_size, train_articles_w2v, training_label_seq)
 
-        X_batch = X_batch.reshape((batch_size, num_time_steps, num_inputs))
-        y_batch = tf.one_hot(y_batch - 1, num_classes, axis=-1).eval().reshape(-1, num_classes)
         for epoch in range(net_epochs):
-            X_batch, y_batch = next_batch(batch_size, train_articles_w2v, training_label_seq)
+            X_batch, y_batch = next_batch(batch_size, train_padded, training_label_seq)
 
-            X_batch = X_batch.reshape((batch_size, num_time_steps, num_inputs))
+            #X_batch = X_batch.reshape((batch_size, num_time_steps, num_inputs))
+            X_batch = X_batch.reshape((batch_size, num_time_steps))
             y_batch = tf.one_hot(y_batch - 1, num_classes, axis=-1).eval().reshape(-1, num_classes)
 
             feed_dict = {model.X: X_batch, model.y: y_batch}
@@ -168,8 +177,8 @@ def train_model():
                 mse = model.evaluate(feed_dict)
                 print(epoch, "\tMSE:", mse)
 
-        X_batch_valid = np.asarray(validation_articles_w2v).reshape(
-            (len(validation_articles_w2v), num_time_steps, num_inputs))
+        # X_batch_valid = np.asarray(validation_padded).reshape((len(validation_articles_w2v), num_time_steps, num_inputs))
+        X_batch_valid = np.asarray(validation_padded).reshape((len(validation_articles_w2v), num_time_steps))
         y_batch_valid = tf.one_hot(validation_label_seq - 1, num_classes, axis=-1).eval().reshape(-1, num_classes)
 
         feed_dict_valid = {model.X: X_batch_valid, model.y: y_batch_valid}
@@ -180,12 +189,13 @@ def train_model():
               format(epoch + 1, loss_valid, acc_valid))
         print('---------------------------------------------------------')
 
-        X_batch, y_batch = next_batch(1, train_articles_w2v, training_label_seq)
-
-        X_batch = X_batch.reshape((1, num_time_steps, num_inputs))
+        X_batch, y_batch = next_batch(1, train_padded, training_label_seq)
+        #X_batch = X_batch.reshape((1, num_time_steps, num_inputs))
+        X_batch = X_batch.reshape((1, num_time_steps))
         y_batch = tf.one_hot(y_batch - 1, num_classes, axis=-1).eval().reshape(-1, num_classes)
 
         feed_dict = {model.X: X_batch, model.y: y_batch}
-        print(np.argmax(sess.run(model.y, feed_dict)) == np.argmax(y_batch))
+        print(np.argmax(sess.run(model.y, feed_dict)) == y_batch)
+
 
 train_model()

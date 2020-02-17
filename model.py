@@ -2,7 +2,7 @@ import tensorflow as tf
 
 class BiRNNWithPooling:
 
-    def __init__(self, num_inputs, num_time_steps, num_hidden, learning_rate, num_classes, dropout_keep_prob, pooling):
+    def __init__(self, num_inputs, num_time_steps, num_hidden, learning_rate, num_classes, dropout_keep_prob, pooling, embedding_matrix):
         # Just one feature, the time series(embeddig dim)
         self.num_inputs = num_inputs
         # Num of steps in each batch (seqlength)
@@ -18,6 +18,9 @@ class BiRNNWithPooling:
         # Pooling (max, avg, None)
         self.pooling = pooling
 
+        self.saved_embeddings = tf.constant(embedding_matrix, dtype=tf.float32)
+        self.embedding = tf.Variable(initial_value=self.saved_embeddings, trainable=False)
+
         self.X, self.y = self.__init_placeholders()
 
         self.W, self.b = self.__init_variables()
@@ -25,14 +28,15 @@ class BiRNNWithPooling:
         self.optimizer, self.loss, self.output_logits = self.__get_network()
 
     def __init_placeholders(self):
-        X = tf.placeholder(tf.float32, [None, self.num_time_steps, self.num_inputs])
+        # X = tf.placeholder(tf.float32, [None, self.num_time_steps, self.num_inputs])
+        X = tf.placeholder(tf.int32, [None, self.num_time_steps])
         y = tf.placeholder(tf.float32, [None, self.num_classes])
 
         return X, y
 
     def __init_variables(self):
-        W = tf.Variable(tf.random_normal(shape=[2 * self.num_hidden, self.num_classes]))
-        b = tf.Variable(tf.ones([self.num_classes]))
+        W = tf.Variable(tf.random_normal(shape=[2 * self.num_hidden, self.num_classes]), dtype=tf.float32)
+        b = tf.Variable(tf.ones([self.num_classes], dtype=tf.float32))
 
         return W, b
 
@@ -85,7 +89,9 @@ class BiRNNWithPooling:
         return optimizer
 
     def __get_network(self):
-        rnn_output = self.__biRNN(self.X)
+        embed = tf.nn.embedding_lookup(self.embedding, self.X)
+        #embed=tf.unstack(embed, axis=1)
+        rnn_output = self.__biRNN(embed)
         output_logits = self.__dense_layer(rnn_output, self.W, self.b)
         loss = self.__loss(output_logits, self.y)
         optimizer = self.__optimizer(loss)
