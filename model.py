@@ -46,30 +46,33 @@ class BiRNNWithPooling:
         return W, b
 
     def __biRNN(self, input):
-        fw_cell = tf.nn.rnn_cell.LSTMCell(self.num_hidden, forget_bias=1.0)
-        bw_cell = tf.nn.rnn_cell.LSTMCell(self.num_hidden, forget_bias=1.0)
+        with tf.variable_scope("birnn_pool"):
 
-        if self.dropout_keep_prob is not None:
-                fw_cell=tf.contrib.rnn.DropoutWrapper(fw_cell,output_keep_prob=self.dropout_keep_prob)
-                bw_cell=tf.contrib.rnn.DropoutWrapper(bw_cell,output_keep_prob=self.dropout_keep_prob)
+            fw_cell = tf.nn.rnn_cell.LSTMCell(self.num_hidden, forget_bias=1.0)
+            bw_cell = tf.nn.rnn_cell.LSTMCell(self.num_hidden, forget_bias=1.0)
 
-        outputs, _ = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, input,
-                                                     dtype=tf.float32)
+            if self.dropout_keep_prob is not None:
+                    fw_cell=tf.contrib.rnn.DropoutWrapper(fw_cell,output_keep_prob=self.dropout_keep_prob)
+                    bw_cell=tf.contrib.rnn.DropoutWrapper(bw_cell,output_keep_prob=self.dropout_keep_prob)
 
-        output_rnn = tf.concat(outputs, axis=2)  # [batch_size,sequence_length,hidden_size*2]
+            outputs, _ = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, input,
+                                                         dtype=tf.float32)
 
-        # this is pooling
-        if self.pooling is not None:
-            if self.pooling == 'max':
-                output_rnn_last = tf.reduce_max(output_rnn,axis=1)  # [batch_size,hidden_size*2]
-            if self.pooling == 'avg':
-                output_rnn_last = tf.reduce_mean(output_rnn, axis=1)
-        else:
-            # this uses the last hidden state as the representation.
-            # [batch_size,hidden_size*2]
-            output_rnn_last = output_rnn[:,-1,:]
+            output_rnn = tf.concat(outputs, axis=2)  # [batch_size,sequence_length,hidden_size*2]
 
-        return output_rnn_last
+            # this is pooling
+            if self.pooling is not None:
+                if self.pooling == 'max':
+                    output_rnn_last = tf.reduce_max(output_rnn,axis=1)  # [batch_size,hidden_size*2]
+                if self.pooling == 'avg':
+                    output_rnn_last = tf.reduce_mean(output_rnn, axis=1)
+            else:
+                # this uses the last hidden state as the representation.
+                # [batch_size,hidden_size*2]
+                output_rnn_last = output_rnn[:,-1,:]
+
+
+            return output_rnn_last
 
     def __dense_layer(self, input, weights, biases):
         output_logits = tf.matmul(input, weights) + biases
@@ -95,9 +98,9 @@ class BiRNNWithPooling:
 
     def __get_network(self):
         if self.use_embedding_layer:
-            embed = tf.nn.embedding_lookup(self.embedding, self.X)
-            #embed=tf.unstack(embed, axis=1)
-            rnn_output = self.__biRNN(embed)
+            self.embed = tf.nn.embedding_lookup(self.embedding, self.X)
+            #embed=tf.unstack(embed)
+            rnn_output = self.__biRNN(self.embed)
         else:
             rnn_output = self.__biRNN(self.X)
         output_logits = self.__dense_layer(rnn_output, self.W, self.b)

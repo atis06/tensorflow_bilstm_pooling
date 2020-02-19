@@ -31,7 +31,7 @@ epochs = 15
 
 ## Network training parameters
 
-net_epochs = 150
+net_epochs = 10
 num_inputs = 300
 num_time_steps = 200
 num_hidden = 200
@@ -41,7 +41,7 @@ num_classes = 5
 dropout_keep_prob = 0.8
 pooling = 'max'
 
-use_embedding_layer=True
+use_embedding_layer=False
 
 def preprocess_data():
     articles = []
@@ -157,7 +157,7 @@ def train_model():
 
     embedding_matrix = get_embedding_matrix(w2v_model)
 
-    model = BiRNNWithPooling(num_inputs, num_time_steps, num_hidden, learning_rate, num_classes, dropout_keep_prob, pooling, True, embedding_matrix)
+    model = BiRNNWithPooling(num_inputs, num_time_steps, num_hidden, learning_rate, num_classes, dropout_keep_prob, pooling, use_embedding_layer, embedding_matrix)
     init = tf.global_variables_initializer()
 
 
@@ -165,12 +165,13 @@ def train_model():
         sess.run(init)
 
         for epoch in range(net_epochs):
-            X_batch, y_batch = next_batch(batch_size, train_padded, training_label_seq)
-
             if use_embedding_layer:
+                X_batch, y_batch = next_batch(batch_size, train_padded, training_label_seq)
                 X_batch = X_batch.reshape((batch_size, num_time_steps))
             else:
-                X_batch = X_batch.reshape((batch_size, num_time_steps, num_inputs))
+                X_batch, y_batch = next_batch(batch_size, train_articles_w2v, training_label_seq)
+                X_batch = X_batch.reshape(batch_size, num_time_steps, num_inputs)
+
             y_batch = tf.one_hot(y_batch - 1, num_classes, axis=-1).eval().reshape(-1, num_classes)
 
             feed_dict = {model.X: X_batch, model.y: y_batch}
@@ -181,11 +182,12 @@ def train_model():
                 mse = model.evaluate(feed_dict)
                 print(epoch, "\tMSE:", mse)
 
+        print(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, "birnn"))
 
         if use_embedding_layer:
-            X_batch_valid = np.asarray(validation_padded).reshape((len(validation_articles_w2v), num_time_steps))
+            X_batch_valid = np.asarray(validation_padded).reshape(len(validation_padded), num_time_steps)
         else:
-            X_batch_valid = np.asarray(validation_padded).reshape((len(validation_articles_w2v), num_time_steps, num_inputs))
+            X_batch_valid = np.asarray(validation_articles_w2v).reshape(len(validation_articles_w2v), num_time_steps, num_inputs)
         y_batch_valid = tf.one_hot(validation_label_seq - 1, num_classes, axis=-1).eval().reshape(-1, num_classes)
 
         feed_dict_valid = {model.X: X_batch_valid, model.y: y_batch_valid}
@@ -196,13 +198,15 @@ def train_model():
               format(epoch + 1, loss_valid, acc_valid))
         print('---------------------------------------------------------')
 
-        X_batch = X_batch.reshape((1, num_time_steps, num_inputs))
         if use_embedding_layer:
-            X_batch = X_batch.reshape((1, num_time_steps))
-            y_batch = tf.one_hot(y_batch - 1, num_classes, axis=-1).eval().reshape(-1, num_classes)
-        else:
             X_batch, y_batch = next_batch(1, train_padded, training_label_seq)
-        
+            X_batch = X_batch.reshape((1, num_time_steps))
+        else:
+            X_batch, y_batch = next_batch(1, train_articles_w2v, training_label_seq)
+            X_batch = X_batch.reshape((1, num_time_steps, num_inputs))
+
+        y_batch = tf.one_hot(y_batch - 1, num_classes, axis=-1).eval().reshape(-1, num_classes)
+
         feed_dict = {model.X: X_batch, model.y: y_batch}
         print(np.argmax(sess.run(model.y, feed_dict)) == np.argmax(y_batch))
 
