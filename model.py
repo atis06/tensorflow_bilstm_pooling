@@ -1,4 +1,5 @@
 import tensorflow as tf
+import utils
 
 class BiRNNWithPooling:
 
@@ -103,7 +104,8 @@ class BiRNNWithPooling:
             rnn_output = self.__biRNN(self.embed)
         else:
             rnn_output = self.__biRNN(self.X)
-        output_logits = self.__dense_layer(rnn_output, self.W, self.b)
+        output_logits = tf.layers.dense(rnn_output, units=self.num_classes)
+        #output_logits = self.__dense_layer(rnn_output, self.W, self.b)
         loss = self.__loss(output_logits, self.y)
         optimizer = self.__optimizer(loss)
 
