@@ -1,5 +1,5 @@
 import tensorflow as tf
-import utils
+
 
 class BiRNNWithPooling:
 
@@ -135,49 +135,3 @@ class BiRNNWithPooling:
         loss_valid, acc_valid = sess.run([loss, accuracy], feed_dict=feed_dict_valid)
 
         return loss_valid, acc_valid
-
-    def get_masked_lm_network(self):
-        """Get loss and log probs for the masked LM."""
-
-        positions = tf.placeholder(tf.float32)
-        label_ids = tf.placeholder(tf.float32)
-        label_weights = tf.placeholder(tf.float32)
-
-        self.embed = tf.nn.embedding_lookup(self.embedding, self.X)
-        rnn_output = self.__biRNN(self.embed, True)
-
-        input_tensor = tf.layers.dense(rnn_output, units=2 * self.num_hidden)
-
-        input_tensor = utils.gather_indexes(input_tensor, positions)
-        input_tensor = utils.layer_norm(input_tensor)
-
-        vocab_size = self.embedding_matrix[0]
-
-        # The output weights are the same as the input embeddings, but there is
-        # an output-only bias for each token.
-        output_bias = tf.get_variable(
-            shape=[vocab_size],
-            initializer=tf.zeros_initializer())
-        logits = tf.matmul(input_tensor, self.embedding_matrix, transpose_b=True)
-        logits = tf.nn.bias_add(logits, output_bias)
-        log_probs = tf.nn.log_softmax(logits, axis=-1)
-
-        label_ids = tf.reshape(label_ids, [-1])
-        label_weights = tf.reshape(label_weights, [-1])
-
-        one_hot_labels = tf.one_hot(
-            label_ids, depth=vocab_size, dtype=tf.float32)
-
-        # The `positions` tensor might be zero-padded (if the sequence is too
-        # short to have the maximum number of predictions). The `label_weights`
-        # tensor has a value of 1.0 for every real prediction and 0.0 for the
-        # padding predictions.
-        per_example_loss = -tf.reduce_sum(log_probs * one_hot_labels, axis=[-1])
-        numerator = tf.reduce_sum(label_weights * per_example_loss)
-        denominator = tf.reduce_sum(label_weights) + 1e-5
-        loss = numerator / denominator
-
-        optimizer = self.__optimizer(loss)
-
-        return (loss, optimizer)
-
