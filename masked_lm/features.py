@@ -1,4 +1,5 @@
 import tensorflow as tf
+tf.logging.set_verbosity(tf.logging.INFO)
 
 class InputExample(object):
 
@@ -19,6 +20,9 @@ class InputFeatures(object):
     self.input_type_ids = input_type_ids
 
 
+def decode_article(text, reverse_word_index):
+    return ' '.join([reverse_word_index.get(i, '?') for i in text])
+
 def _truncate_seq_pair(tokens_a, tokens_b, max_length):
   """Truncates a sequence pair in place to the maximum length."""
 
@@ -36,16 +40,17 @@ def _truncate_seq_pair(tokens_a, tokens_b, max_length):
       tokens_b.pop()
 
 
+#TODO: masking
 def convert_examples_to_features(examples, seq_length, tokenizer):
   """Loads a data file into a list of `InputBatch`s."""
 
   features = []
   for (ex_index, example) in enumerate(examples):
-    tokens_a = example.text_a
+    tokens_a = [token for token in example.text_a.split()]
 
     tokens_b = None
     if example.text_b:
-      tokens_b = example.text_b
+      tokens_b = [token for token in example.text_b.split()]
 
     if tokens_b:
       # Modifies `tokens_a` and `tokens_b` in place so that the total
@@ -92,7 +97,7 @@ def convert_examples_to_features(examples, seq_length, tokenizer):
       tokens.append("[SEP]")
       input_type_ids.append(1)
 
-    input_ids = tokenizer.convert_tokens_to_ids(tokens)
+    input_ids = tokenizer.texts_to_sequences(tokens)
 
     # The mask has 1 for real tokens and 0 for padding tokens. Only real
     # tokens are attended to.
@@ -104,11 +109,15 @@ def convert_examples_to_features(examples, seq_length, tokenizer):
       input_mask.append(0)
       input_type_ids.append(0)
 
+    print(tokens_a)
+
     assert len(input_ids) == seq_length
     assert len(input_mask) == seq_length
     assert len(input_type_ids) == seq_length
 
-    if ex_index < 5:
+
+
+    '''if ex_index < 5:
       tf.logging.info("*** Example ***")
       tf.logging.info("unique_id: %s" % (example.unique_id))
       tf.logging.info("tokens: %s" % " ".join(
@@ -116,7 +125,7 @@ def convert_examples_to_features(examples, seq_length, tokenizer):
       tf.logging.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
       tf.logging.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
       tf.logging.info(
-          "input_type_ids: %s" % " ".join([str(x) for x in input_type_ids]))
+          "input_type_ids: %s" % " ".join([str(x) for x in input_type_ids]))'''
 
     features.append(
         InputFeatures(

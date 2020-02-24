@@ -3,24 +3,25 @@ import tensorflow as tf
 import numpy as np
 import nltk
 from tensorflow.keras.preprocessing.text import Tokenizer
-from tensorflow.keras.preprocessing.sequence import pad_sequences
 from nltk.corpus import stopwords
 import gensim
+import utils
+import features
+import random
+import sys
+np.set_printoptions(threshold=sys.maxsize)
 
-from basic.model import BiRNNWithPooling
+from masked_lm.model import BiRNNWithPooling
 
 print(tf.__version__)
 
 nltk.download('stopwords')
 STOPWORDS = set(stopwords.words('english'))
+#STOPWORDS = []
 
 # Preprocess parameters
-vocab_size = 10000
-embedding_dim = 64
-max_length = 200
-trunc_type = 'post'
-padding_type = 'post'
-oov_tok = '[UNK]'
+vocab_size = 5000
+oov_tok = 'OOV'
 training_portion = .8
 
 # W2V parameters
@@ -41,13 +42,13 @@ num_classes = 5
 dropout_keep_prob = 0.8
 pooling = 'max'
 
-use_embedding_layer=False
+use_embedding_layer=True
 
 def preprocess_data():
     articles = []
     labels = []
 
-    with open("basic/bbc-text.csv", 'r') as csvfile:
+    with open("masked_lm/bbc-text.csv", 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=',')
         next(reader)
         for row in reader:
@@ -59,37 +60,22 @@ def preprocess_data():
                 article = article.replace(' ', ' ')
             articles.append(article)
 
-    train_size = int(len(articles) * training_portion)
-    train_articles = articles[0: train_size]
-    train_labels = labels[0: train_size]
 
-    validation_articles = articles[train_size:]
-    validation_labels = labels[train_size:]
 
     tokenizer = Tokenizer(num_words=vocab_size, oov_token=oov_tok)
-    tokenizer.fit_on_texts(train_articles)
+    tokenizer.fit_on_texts(articles)
     word_index = tokenizer.word_index
 
 
-    train_sequences = tokenizer.texts_to_sequences(train_articles)
-    train_padded = np.asarray(pad_sequences(train_sequences, maxlen=max_length, padding=padding_type, truncating=trunc_type), dtype='int32')
-
-    validation_sequences = tokenizer.texts_to_sequences(validation_articles)
-    validation_padded = np.asarray(pad_sequences(validation_sequences, maxlen=max_length, padding=padding_type, truncating=trunc_type), dtype='int32')
+    sequences = tokenizer.texts_to_sequences(articles)
 
     label_tokenizer = Tokenizer()
     label_tokenizer.fit_on_texts(labels)
 
     reverse_word_index = dict([(value, key) for (key, value) in word_index.items()])
 
-    training_label_seq = np.array(label_tokenizer.texts_to_sequences(train_labels))
-    validation_label_seq = np.array(label_tokenizer.texts_to_sequences(validation_labels))
+    return articles, sequences, tokenizer, word_index, reverse_word_index
 
-    return train_padded, train_labels, validation_padded, validation_labels, reverse_word_index, articles, training_label_seq, validation_label_seq
-
-
-def decode_article(text, reverse_word_index):
-    return ' '.join([reverse_word_index.get(i, '?') for i in text])
 
 
 def train_w2v(articles):
@@ -115,7 +101,7 @@ def apply_w2v(model, train_padded, validation_padded, reverse_word_index):
 
     for row in train_padded:
         w2v_sentence = []
-        for word in enumerate(decode_article(row, reverse_word_index).split()):
+        for word in enumerate(utils.decode_article(row, reverse_word_index).split()):
             try:
                 w2v_sentence.append(np.asarray(model.wv[word[1]]))
             except Exception as e:
@@ -124,7 +110,7 @@ def apply_w2v(model, train_padded, validation_padded, reverse_word_index):
 
     for row in validation_padded:
         w2v_sentence = []
-        for word in enumerate(decode_article(row, reverse_word_index).split()):
+        for word in enumerate(utils.decode_article(row, reverse_word_index).split()):
             try:
                 w2v_sentence.append(np.asarray(model.wv[word[1]]))
             except Exception as e:
@@ -134,14 +120,13 @@ def apply_w2v(model, train_padded, validation_padded, reverse_word_index):
     return train_articles_w2v, validation_articles_w2v
 
 
-def next_batch(batch_size, train_articles_w2v, training_label_seq):
-    idx = np.arange(0, len(train_articles_w2v))
+def next_batch(batch_size, articles):
+    idx = np.arange(0, len(articles))
     np.random.shuffle(idx)
     idx = idx[0:batch_size]
-    data_shuffle = [train_articles_w2v[i] for i in idx]
-    labels_shuffle = [training_label_seq[i] for i in idx]
+    data_shuffle = [articles[i] for i in idx]
 
-    return np.asarray(data_shuffle), np.asarray(labels_shuffle)
+    return np.asarray(data_shuffle)
 
 
 def print_shape(varname, var):
@@ -150,34 +135,62 @@ def print_shape(varname, var):
 
 
 def train_model():
-    train_padded, train_labels, validation_padded, validation_labels, reverse_word_index, articles, training_label_seq, validation_label_seq = preprocess_data()
+    articles, sequences, tokenizer, word_index, reverse_word_index = preprocess_data()
+
+    input_example = [features.InputExample(1, articles[0][0:200], None)]
+    #print(input_example)
+
+    #len(input_example[0].text_a)
+    features_list = features.convert_examples_to_features(input_example, 200, tokenizer)
+    feature = features_list[0]
+
+    #print(feature.)
+
+
+    (tokens, masked_lm_positions,
+     masked_lm_labels) = utils.create_masked_lm_predictions(
+        feature.tokens, 0.2, 50, reverse_word_index, random)
+    instance = utils.TrainingInstance(
+        tokens=tokens,
+        segment_ids=feature.input_type_ids,
+        is_random_next=True,
+        masked_lm_positions=masked_lm_positions,
+        masked_lm_labels=masked_lm_labels)
+
+    print(tokens)
+
+    masked_lm_ids = tokenizer.texts_to_sequences(instance.masked_lm_labels)
+    masked_lm_ids = [masked_lm_id[0] for masked_lm_id in masked_lm_ids]
+    masked_lm_weights = [1.0] * len(masked_lm_ids)
+
+    print(masked_lm_ids)
+    #print(masked_lm_positions)
+    #print(masked_lm_weights)
+
     w2v_model = train_w2v(articles)
-    train_articles_w2v, validation_articles_w2v = apply_w2v(w2v_model, train_padded, validation_padded,
-                                                            reverse_word_index)
 
     embedding_matrix = get_embedding_matrix(w2v_model)
+    #X_batch = next_batch(batch_size, articles)
+    #print(X_batch)
+    X_batch = np.asarray([index[0] for index in tokenizer.texts_to_sequences(tokens)])
+    X_batch = X_batch.reshape(1, len(tokens))
+    model = BiRNNWithPooling(1, len(tokens), num_hidden, learning_rate, num_classes, dropout_keep_prob, pooling, use_embedding_layer, embedding_matrix)
 
-    model = BiRNNWithPooling(num_inputs, num_time_steps, num_hidden, learning_rate, num_classes, dropout_keep_prob, pooling, use_embedding_layer, embedding_matrix)
     init = tf.global_variables_initializer()
 
 
     with tf.Session() as sess:
         sess.run(init)
+        feed_dict = {model.X: X_batch, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids,
+                     model.label_weights: masked_lm_weights}
+        for i in range(1000000):
+            model.train_masked_lm(sess, feed_dict)
 
-        for epoch in range(net_epochs):
-            if use_embedding_layer:
-                X_batch, y_batch = next_batch(batch_size, train_padded, training_label_seq)
-                X_batch = X_batch.reshape((batch_size, num_time_steps))
-            else:
-                X_batch, y_batch = next_batch(batch_size, train_articles_w2v, training_label_seq)
-                X_batch = X_batch.reshape(batch_size, num_time_steps, num_inputs)
+        result = np.argmax(sess.run(model.out, feed_dict))
+        print(result)
+        #print([reverse_word_index[word] for word in result])
 
-            y_batch = tf.one_hot(y_batch - 1, num_classes, axis=-1).eval().reshape(-1, num_classes)
-
-            feed_dict = {model.X: X_batch, model.y: y_batch}
-            model.train(sess, feed_dict)
-
-            if epoch % 100 == 0:
+    '''       if epoch % 100 == 0:
                 feed_dict = {model.X: X_batch, model.y: y_batch}
                 mse = model.evaluate(feed_dict)
                 print(epoch, "\tMSE:", mse)
@@ -208,7 +221,7 @@ def train_model():
         y_batch = tf.one_hot(y_batch - 1, num_classes, axis=-1).eval().reshape(-1, num_classes)
 
         feed_dict = {model.X: X_batch, model.y: y_batch}
-        print(np.argmax(sess.run(model.y, feed_dict)) == np.argmax(y_batch))
+        print(np.argmax(sess.run(model.y, feed_dict)) == np.argmax(y_batch))'''
 
 
 train_model()

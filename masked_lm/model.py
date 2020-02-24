@@ -1,6 +1,7 @@
 import tensorflow as tf
 import utils
 
+
 class BiRNNWithPooling:
 
     def __init__(self, num_inputs, num_time_steps, num_hidden, learning_rate, num_classes, dropout_keep_prob, pooling, use_embedding_layer, embedding_matrix):
@@ -27,11 +28,16 @@ class BiRNNWithPooling:
             self.saved_embeddings = tf.constant(embedding_matrix, dtype=tf.float32)
             self.embedding = tf.Variable(initial_value=self.saved_embeddings, trainable=False)
 
-        self.X, self.y = self.__init_placeholders()
-
+        #self.X, self.y = self.__init_placeholders()
+        self.X = tf.placeholder(tf.int32, [None, self.num_time_steps])
         self.W, self.b = self.__init_variables()
 
-        self.optimizer, self.loss, self.output_logits = self.__get_network()
+        self.positions, self.label_ids, self.label_weights = self.__init_placeholders_masked_lm()
+
+        self.optimizer, self.loss, self.output_logits, self.out = self.__get_masked_lm_network()
+
+
+
 
     def __init_placeholders(self):
         if self.use_embedding_layer:
@@ -41,6 +47,13 @@ class BiRNNWithPooling:
         y = tf.placeholder(tf.float32, [None, self.num_classes])
 
         return X, y
+
+    def __init_placeholders_masked_lm(self):
+        positions = tf.placeholder(tf.int32)
+        label_ids = tf.placeholder(tf.int32)
+        label_weights = tf.placeholder(tf.float64)
+
+        return positions, label_ids, label_weights
 
     def __init_variables(self):
         W = tf.Variable(tf.random_normal(shape=[2 * self.num_hidden, self.num_classes]), dtype=tf.float32)
@@ -102,7 +115,7 @@ class BiRNNWithPooling:
 
         return optimizer
 
-    def __get_network(self):
+    '''def __get_network(self):
         if self.use_embedding_layer:
             self.embed = tf.nn.embedding_lookup(self.embedding, self.X)
             #embed=tf.unstack(embed)
@@ -117,7 +130,7 @@ class BiRNNWithPooling:
         return optimizer, loss, output_logits
 
     def get_network(self):
-        return self.optimizer, self.loss, self.output_logits
+        return self.optimizer, self.loss, self.output_logits'''
 
     def train(self, sess, feed_dict):
         optimizer, loss, output_logits = self.get_network()
@@ -137,37 +150,44 @@ class BiRNNWithPooling:
         return loss_valid, acc_valid
 
     def get_masked_lm_network(self):
+        return self.optimizer, self.loss, self.output_logits, self.out
+
+    def __get_masked_lm_network(self):
         """Get loss and log probs for the masked LM."""
 
-        positions = tf.placeholder(tf.float32)
-        label_ids = tf.placeholder(tf.float32)
-        label_weights = tf.placeholder(tf.float32)
+        vocab_size = self.embedding_matrix.shape[0]
+        embedding_size = self.embedding_matrix.shape[1]
 
         self.embed = tf.nn.embedding_lookup(self.embedding, self.X)
         rnn_output = self.__biRNN(self.embed, True)
 
-        input_tensor = tf.layers.dense(rnn_output, units=2 * self.num_hidden)
+        input_tensor = tf.layers.dense(rnn_output, units=embedding_size)
 
-        input_tensor = utils.gather_indexes(input_tensor, positions)
+
+        input_tensor = utils.gather_indexes(input_tensor, self.positions)
         input_tensor = utils.layer_norm(input_tensor)
+        input_tensor = tf.cast(input_tensor, tf.float64)
 
-        vocab_size = self.embedding_matrix[0]
+
+
+        print(vocab_size)
 
         # The output weights are the same as the input embeddings, but there is
         # an output-only bias for each token.
-        output_bias = tf.get_variable(
+        output_bias = tf.get_variable(name='output_bias',
             shape=[vocab_size],
-            initializer=tf.zeros_initializer())
+            initializer=tf.zeros_initializer(), dtype=tf.float64)
         logits = tf.matmul(input_tensor, self.embedding_matrix, transpose_b=True)
         logits = tf.nn.bias_add(logits, output_bias)
         log_probs = tf.nn.log_softmax(logits, axis=-1)
 
-        label_ids = tf.reshape(label_ids, [-1])
-        label_weights = tf.reshape(label_weights, [-1])
+        label_ids = tf.reshape(self.label_ids, [-1])
+        label_weights = tf.reshape(self.label_weights, [-1])
 
         one_hot_labels = tf.one_hot(
-            label_ids, depth=vocab_size, dtype=tf.float32)
+            label_ids, depth=vocab_size, dtype=tf.float64)
 
+        out = log_probs
         # The `positions` tensor might be zero-padded (if the sequence is too
         # short to have the maximum number of predictions). The `label_weights`
         # tensor has a value of 1.0 for every real prediction and 0.0 for the
@@ -179,11 +199,10 @@ class BiRNNWithPooling:
 
         optimizer = self.__optimizer(loss)
 
-        return (loss, optimizer)
+        return optimizer, loss, logits, out
 
-    def evaluate_masked_lm(self, feed_dict):
-        optimizer, loss, output_logits = self.get_network()
-        mse = loss.eval(feed_dict)
+    def train_masked_lm(self, sess, feed_dict):
+        loss, optimizer, logits, out = self.get_masked_lm_network()
+        sess.run(optimizer, feed_dict)
 
-        return mse
 
