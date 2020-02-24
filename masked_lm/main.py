@@ -1,3 +1,6 @@
+import masked_lm
+from masked_lm.model import BiRNNWithPooling
+
 import csv
 import tensorflow as tf
 import numpy as np
@@ -11,7 +14,7 @@ import random
 import sys
 np.set_printoptions(threshold=sys.maxsize)
 
-from masked_lm.model import BiRNNWithPooling
+
 
 print(tf.__version__)
 
@@ -186,7 +189,7 @@ def train_model():
         for i in range(1000000):
             model.train_masked_lm(sess, feed_dict)
 
-        result = np.argmax(sess.run(model.out, feed_dict))
+        result = np.argmax(sess.run(model.out, feed_dict), axis=1)
         print(result)
         #print([reverse_word_index[word] for word in result])
 
