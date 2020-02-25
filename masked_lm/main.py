@@ -39,7 +39,7 @@ net_epochs = 10
 num_inputs = 300
 num_time_steps = 200
 num_hidden = 200
-learning_rate = 0.001
+learning_rate = 0.000001
 batch_size = 100
 num_classes = 5
 dropout_keep_prob = 0.8
@@ -167,6 +167,7 @@ def train_model():
     masked_lm_weights = [1.0] * len(masked_lm_ids)
 
     print(masked_lm_ids)
+    print("to predict: " + str([reverse_word_index[word] for word in masked_lm_ids]))
     #print(masked_lm_positions)
     #print(masked_lm_weights)
 
@@ -187,11 +188,13 @@ def train_model():
         feed_dict = {model.X: X_batch, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids,
                      model.label_weights: masked_lm_weights}
         for i in range(1000000):
+            if i % 100000 == 0:
+                print(i)
             model.train_masked_lm(sess, feed_dict)
 
         result = np.argmax(sess.run(model.out, feed_dict), axis=1)
         print(result)
-        #print([reverse_word_index[word] for word in result])
+        print('prediction: ' + str([reverse_word_index[word] for word in result]))
 
     '''       if epoch % 100 == 0:
                 feed_dict = {model.X: X_batch, model.y: y_batch}

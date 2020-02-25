@@ -174,10 +174,9 @@ class BiRNNWithPooling:
         vocab_size = self.embedding_matrix.shape[0]
         embedding_size = self.embedding_matrix.shape[1]
 
-
-
         self.embed = tf.nn.embedding_lookup(self.embedding, self.X)
         rnn_output = self.__biRNN(self.embed, True)
+        rnn_output = tf.nn.softmax(rnn_output)
 
         input_tensor = utils.gather_indexes(rnn_output, self.positions)
 
