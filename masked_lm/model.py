@@ -1,5 +1,6 @@
 import tensorflow as tf
 import utils
+import numpy as np
 
 
 class BiRNNWithPooling:
@@ -149,6 +150,21 @@ class BiRNNWithPooling:
 
         return loss_valid, acc_valid
 
+    def gelu(self, x):
+        """Gaussian Error Linear Unit.
+
+        This is a smoother version of the RELU.
+        Original paper: https://arxiv.org/abs/1606.08415
+        Args:
+          x: float Tensor to perform activation.
+
+        Returns:
+          `x` with the GELU activation applied.
+        """
+        cdf = 0.5 * (1.0 + tf.tanh(
+            (np.sqrt(2 / np.pi) * (x + 0.044715 * tf.pow(x, 3)))))
+        return x * cdf
+
     def get_masked_lm_network(self):
         return self.optimizer, self.loss, self.output_logits, self.out
 
@@ -158,19 +174,17 @@ class BiRNNWithPooling:
         vocab_size = self.embedding_matrix.shape[0]
         embedding_size = self.embedding_matrix.shape[1]
 
+
+
         self.embed = tf.nn.embedding_lookup(self.embedding, self.X)
         rnn_output = self.__biRNN(self.embed, True)
 
-        input_tensor = tf.layers.dense(rnn_output, units=embedding_size)
+        input_tensor = utils.gather_indexes(rnn_output, self.positions)
 
+        input_tensor = tf.layers.dense(input_tensor, units=embedding_size, activation = self.gelu, kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
 
-        input_tensor = utils.gather_indexes(input_tensor, self.positions)
         input_tensor = utils.layer_norm(input_tensor)
         input_tensor = tf.cast(input_tensor, tf.float64)
-
-
-
-        print(vocab_size)
 
         # The output weights are the same as the input embeddings, but there is
         # an output-only bias for each token.
