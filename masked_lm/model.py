@@ -112,7 +112,7 @@ class BiRNNWithPooling:
         return accuracy
 
     def __optimizer(self, loss):
-        optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(loss)
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate).minimize(loss)
 
         return optimizer
 
@@ -176,11 +176,10 @@ class BiRNNWithPooling:
 
         self.embed = tf.nn.embedding_lookup(self.embedding, self.X)
         rnn_output = self.__biRNN(self.embed, True)
-        rnn_output = tf.nn.softmax(rnn_output)
 
         input_tensor = utils.gather_indexes(rnn_output, self.positions)
 
-        input_tensor = tf.layers.dense(input_tensor, units=embedding_size, activation = self.gelu, kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+        input_tensor = tf.layers.dense(input_tensor, units=self.num_hidden*2, activation = self.gelu, kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
 
         input_tensor = utils.layer_norm(input_tensor)
         input_tensor = tf.cast(input_tensor, tf.float64)
@@ -193,6 +192,7 @@ class BiRNNWithPooling:
         logits = tf.matmul(input_tensor, self.embedding_matrix, transpose_b=True)
         logits = tf.nn.bias_add(logits, output_bias)
         log_probs = tf.nn.log_softmax(logits, axis=-1)
+        #log_probs=tf.nn.softmax(logits)
 
         label_ids = tf.reshape(self.label_ids, [-1])
         label_weights = tf.reshape(self.label_weights, [-1])
@@ -200,7 +200,7 @@ class BiRNNWithPooling:
         one_hot_labels = tf.one_hot(
             label_ids, depth=vocab_size, dtype=tf.float64)
 
-        out = log_probs
+
         # The `positions` tensor might be zero-padded (if the sequence is too
         # short to have the maximum number of predictions). The `label_weights`
         # tensor has a value of 1.0 for every real prediction and 0.0 for the
@@ -209,8 +209,9 @@ class BiRNNWithPooling:
         numerator = tf.reduce_sum(label_weights * per_example_loss)
         denominator = tf.reduce_sum(label_weights) + 1e-5
         loss = numerator / denominator
-
         optimizer = self.__optimizer(loss)
+
+        out = log_probs
 
         return optimizer, loss, logits, out
 

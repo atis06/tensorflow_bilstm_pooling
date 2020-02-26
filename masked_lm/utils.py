@@ -78,12 +78,9 @@ def gather_indexes(sequence_tensor, positions):
   seq_length = sequence_shape[1]
   width = sequence_shape[2]
 
-  print(positions.dtype)
-
 
   flat_offsets = tf.reshape(
       tf.range(0, batch_size, dtype=tf.int32) * seq_length, [-1, 1])
-  print(flat_offsets.dtype)
   flat_positions = tf.reshape(positions + flat_offsets, [-1])
   flat_sequence_tensor = tf.reshape(sequence_tensor,
                                     [batch_size * seq_length, width])

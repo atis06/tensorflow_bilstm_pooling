@@ -109,7 +109,6 @@ def convert_examples_to_features(examples, seq_length, tokenizer):
       input_mask.append(0)
       input_type_ids.append(0)
 
-    print(tokens_a)
 
     assert len(input_ids) == seq_length
     assert len(input_mask) == seq_length

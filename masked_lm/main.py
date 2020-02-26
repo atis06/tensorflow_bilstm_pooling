@@ -38,8 +38,8 @@ epochs = 15
 net_epochs = 10
 num_inputs = 300
 num_time_steps = 200
-num_hidden = 200
-learning_rate = 0.000001
+num_hidden = 150
+learning_rate = 0.1
 batch_size = 100
 num_classes = 5
 dropout_keep_prob = 0.8
@@ -123,13 +123,33 @@ def apply_w2v(model, train_padded, validation_padded, reverse_word_index):
     return train_articles_w2v, validation_articles_w2v
 
 
-def next_batch(batch_size, articles):
+def next_batch(batch_size, articles, tokenizer, reverse_word_index):
     idx = np.arange(0, len(articles))
     np.random.shuffle(idx)
     idx = idx[0:batch_size]
     data_shuffle = [articles[i] for i in idx]
 
-    return np.asarray(data_shuffle)
+    input_examples=[]
+    for i, article in enumerate(data_shuffle):
+        input_examples.append(features.InputExample(i, articles[i], None))
+
+    features_list = features.convert_examples_to_features(input_examples, 15, tokenizer)
+
+    masked_lm_preds = []
+    input_ids = []
+    for feature in features_list:
+        tokens, masked_lm_positions, masked_lm_labels = utils.create_masked_lm_predictions(feature.tokens, 0.2, 1, reverse_word_index, random)
+
+        instance = utils.TrainingInstance(
+            tokens=tokens,
+            segment_ids=feature.input_type_ids,
+            is_random_next=True,
+            masked_lm_positions=masked_lm_positions,
+            masked_lm_labels=masked_lm_labels)
+        masked_lm_preds.append(instance)
+        input_ids.append([id[0] if id !=[] else 1 for id in feature.input_ids])
+
+    return np.asarray(masked_lm_preds),input_ids
 
 
 def print_shape(varname, var):
@@ -140,61 +160,64 @@ def print_shape(varname, var):
 def train_model():
     articles, sequences, tokenizer, word_index, reverse_word_index = preprocess_data()
 
-    input_example = [features.InputExample(1, articles[0][0:200], None)]
-    #print(input_example)
+    tokens=[]
+    masked_lm_ids = []
+    masked_lm_positions = []
+    masked_lm_weights = []
+    data_batch, input_ids = next_batch(batch_size, articles, tokenizer, reverse_word_index)
 
-    #len(input_example[0].text_a)
-    features_list = features.convert_examples_to_features(input_example, 200, tokenizer)
-    feature = features_list[0]
+    for data in data_batch:
+        tokens.append(np.array(data.tokens))
+        ids = tokenizer.texts_to_sequences(data.masked_lm_labels)
+        masked_lm_ids.append([masked_lm_id[0] for masked_lm_id in ids if masked_lm_id != []])
+        masked_lm_weights.append([1.0] * len(ids))
+        masked_lm_positions.append(data.masked_lm_positions)
 
-    #print(feature.)
+    tokens=np.asarray(tokens)
+
+    masked_lm_ids = np.asarray(masked_lm_ids)
+    masked_lm_positions = np.asarray(masked_lm_positions)
+    masked_lm_weights = np.asarray(masked_lm_weights)
+
+    seqlen = len(tokens[0])
 
 
-    (tokens, masked_lm_positions,
-     masked_lm_labels) = utils.create_masked_lm_predictions(
-        feature.tokens, 0.2, 50, reverse_word_index, random)
-    instance = utils.TrainingInstance(
-        tokens=tokens,
-        segment_ids=feature.input_type_ids,
-        is_random_next=True,
-        masked_lm_positions=masked_lm_positions,
-        masked_lm_labels=masked_lm_labels)
+    #print(tokens)
+    X_batch = [token for token in tokens] #tokens.reshape(batch_size, seqlen)
 
-    print(tokens)
+    print(X_batch[0])
+    print(input_ids[0])
+    print('orig: ' + str(masked_lm_ids[0]))
+    print(masked_lm_positions[0])
+    print(masked_lm_weights[0])
 
-    masked_lm_ids = tokenizer.texts_to_sequences(instance.masked_lm_labels)
-    masked_lm_ids = [masked_lm_id[0] for masked_lm_id in masked_lm_ids]
-    masked_lm_weights = [1.0] * len(masked_lm_ids)
-
-    print(masked_lm_ids)
-    print("to predict: " + str([reverse_word_index[word] for word in masked_lm_ids]))
-    #print(masked_lm_positions)
-    #print(masked_lm_weights)
+    #print("to predict: " + str([reverse_word_index[word] for word in masked_lm_ids]))
 
     w2v_model = train_w2v(articles)
 
+
     embedding_matrix = get_embedding_matrix(w2v_model)
-    #X_batch = next_batch(batch_size, articles)
-    #print(X_batch)
-    X_batch = np.asarray([index[0] for index in tokenizer.texts_to_sequences(tokens)])
-    X_batch = X_batch.reshape(1, len(tokens))
-    model = BiRNNWithPooling(1, len(tokens), num_hidden, learning_rate, num_classes, dropout_keep_prob, pooling, use_embedding_layer, embedding_matrix)
+
+
+    model = BiRNNWithPooling(1, seqlen, num_hidden, learning_rate, num_classes, dropout_keep_prob, pooling, use_embedding_layer, embedding_matrix)
 
     init = tf.global_variables_initializer()
 
 
     with tf.Session() as sess:
         sess.run(init)
-        feed_dict = {model.X: X_batch, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids,
+        feed_dict = {model.X: input_ids, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids,
                      model.label_weights: masked_lm_weights}
-        for i in range(1000000):
-            if i % 100000 == 0:
+        for i in range(800):
+            if i % 100 == 0:
                 print(i)
+                print(sess.run(model.loss, feed_dict))
             model.train_masked_lm(sess, feed_dict)
 
-        result = np.argmax(sess.run(model.out, feed_dict), axis=1)
-        print(result)
-        print('prediction: ' + str([reverse_word_index[word] for word in result]))
+        result = sess.run(model.out, feed_dict)
+        print(result.shape)
+        print('res: ' + str(np.argmax(result, axis=-1)))
+        print('prediction: ' + str([reverse_word_index[word+1] for word in np.argmax(result, axis=-1)]))
 
     '''       if epoch % 100 == 0:
                 feed_dict = {model.X: X_batch, model.y: y_batch}
