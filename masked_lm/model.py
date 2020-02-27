@@ -100,6 +100,9 @@ class BiRNNWithPooling:
 
         return output_logits
 
+    def print_shape(self, varname, var):
+        with tf.Session() as sess:
+            print('{0} : {1}'.format(varname, tf.shape(var, name=None)))
 
     def __loss(self, output_logits, y):
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=output_logits))
@@ -171,15 +174,18 @@ class BiRNNWithPooling:
     def __get_masked_lm_network(self):
         """Get loss and log probs for the masked LM."""
 
+        # INIT
         vocab_size = self.embedding_matrix.shape[0]
         embedding_size = self.embedding_matrix.shape[1]
 
+        # RNN
         self.embed = tf.nn.embedding_lookup(self.embedding, self.X)
         rnn_output = self.__biRNN(self.embed, True)
 
+        # MASKED LM
         input_tensor = utils.gather_indexes(rnn_output, self.positions)
 
-        input_tensor = tf.layers.dense(input_tensor, units=self.num_hidden*2, activation = self.gelu, kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+        input_tensor = tf.layers.dense(input_tensor, units=self.num_hidden*2, activation=self.gelu, kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
 
         input_tensor = utils.layer_norm(input_tensor)
         input_tensor = tf.cast(input_tensor, tf.float64)

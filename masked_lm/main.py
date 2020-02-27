@@ -187,9 +187,14 @@ def train_model():
 
     print(X_batch[0])
     print(input_ids[0])
-    print('orig: ' + str(masked_lm_ids[0]))
+    #print('orig: ' + str([reverse_word_index[word+1] for word in masked_lm_ids[0]]))
     print(masked_lm_positions[0])
     print(masked_lm_weights[0])
+
+    print('ORIGS')
+    for i in masked_lm_ids:
+        print(str([reverse_word_index[word + 1] for word in i]))
+    print('END')
 
     #print("to predict: " + str([reverse_word_index[word] for word in masked_lm_ids]))
 
@@ -208,10 +213,10 @@ def train_model():
         sess.run(init)
         feed_dict = {model.X: input_ids, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids,
                      model.label_weights: masked_lm_weights}
-        for i in range(800):
+        for i in range(1):
             if i % 100 == 0:
                 print(i)
-                print(sess.run(model.loss, feed_dict))
+                #print(sess.run(model.out, feed_dict))
             model.train_masked_lm(sess, feed_dict)
 
         result = sess.run(model.out, feed_dict)
