@@ -31,10 +31,10 @@ class TrainingInstance(object):
   def __repr__(self):
     return self.__str__()
 
-def layer_norm(input_tensor, name=None):
+def layer_norm(input_tensor):
   """Run layer normalization on the last dimension of the tensor."""
   return tf.contrib.layers.layer_norm(
-      inputs=input_tensor, begin_norm_axis=-1, begin_params_axis=-1, scope=name)
+      inputs=input_tensor, begin_norm_axis=-1, begin_params_axis=-1)
 
 def get_shape_list(tensor, name=None):
   """Returns a list of the shape of tensor, preferring static dimensions.
@@ -92,7 +92,7 @@ MaskedLmInstance = collections.namedtuple("MaskedLmInstance",
                                           ["index", "label"])
 
 def create_masked_lm_predictions(tokens, masked_lm_prob,
-                                 max_predictions_per_seq, vocab_words, rng):
+                                 max_predictions_per_seq, w2v_model, rng):
   """Creates the predictions for the masked LM objective."""
 
   cand_indexes = []
@@ -138,7 +138,7 @@ def create_masked_lm_predictions(tokens, masked_lm_prob,
           masked_token = tokens[index]
         # 10% of the time, replace with random word
         else:
-          masked_token = vocab_words[rng.randint(0, len(vocab_words) - 1)]
+          masked_token = w2v_model.wv.index2word[rng.randint(0, len(w2v_model.wv.vocab) - 1)]
 
       output_tokens[index] = masked_token
 

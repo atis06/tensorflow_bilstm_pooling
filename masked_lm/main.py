@@ -36,13 +36,13 @@ epochs = 15
 ## Network training parameters
 
 net_epochs = 10
-num_inputs = 300
+num_inputs = 1
 num_time_steps = 200
-num_hidden = 150
+num_hidden = 30
 learning_rate = 0.1
 batch_size = 100
 num_classes = 5
-dropout_keep_prob = 0.8
+dropout_keep_prob = 1
 pooling = 'max'
 
 use_embedding_layer=True
@@ -51,7 +51,7 @@ def preprocess_data():
     articles = []
     labels = []
 
-    with open("masked_lm/bbc-text.csv", 'r') as csvfile:
+    with open("bbc-text.csv", 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=',')
         next(reader)
         for row in reader:
@@ -75,9 +75,9 @@ def preprocess_data():
     label_tokenizer = Tokenizer()
     label_tokenizer.fit_on_texts(labels)
 
-    reverse_word_index = dict([(value, key) for (key, value) in word_index.items()])
+    reverse_word_index = dict([(value , key) for (key, value) in word_index.items()])
 
-    return articles, sequences, tokenizer, word_index, reverse_word_index
+    return articles, sequences, tokenizer
 
 
 
@@ -123,7 +123,7 @@ def apply_w2v(model, train_padded, validation_padded, reverse_word_index):
     return train_articles_w2v, validation_articles_w2v
 
 
-def next_batch(batch_size, articles, tokenizer, reverse_word_index):
+def next_batch(batch_size, articles, tokenizer, w2v_model):
     idx = np.arange(0, len(articles))
     np.random.shuffle(idx)
     idx = idx[0:batch_size]
@@ -138,8 +138,7 @@ def next_batch(batch_size, articles, tokenizer, reverse_word_index):
     masked_lm_preds = []
     input_ids = []
     for feature in features_list:
-        tokens, masked_lm_positions, masked_lm_labels = utils.create_masked_lm_predictions(feature.tokens, 0.2, 1, reverse_word_index, random)
-
+        tokens, masked_lm_positions, masked_lm_labels = utils.create_masked_lm_predictions(feature.tokens, 0.4, 3, w2v_model, random)
         instance = utils.TrainingInstance(
             tokens=tokens,
             segment_ids=feature.input_type_ids,
@@ -158,13 +157,17 @@ def print_shape(varname, var):
 
 
 def train_model():
-    articles, sequences, tokenizer, word_index, reverse_word_index = preprocess_data()
+    articles, sequences, tokenizer = preprocess_data()
+
+    w2v_model = train_w2v(articles)
+
+    embedding_matrix = get_embedding_matrix(w2v_model)
 
     tokens=[]
     masked_lm_ids = []
     masked_lm_positions = []
     masked_lm_weights = []
-    data_batch, input_ids = next_batch(batch_size, articles, tokenizer, reverse_word_index)
+    data_batch, input_ids = next_batch(batch_size, articles, tokenizer, w2v_model)
 
     for data in data_batch:
         tokens.append(np.array(data.tokens))
@@ -175,33 +178,43 @@ def train_model():
 
     tokens=np.asarray(tokens)
 
+    input_ids = [np.asarray(ids) - 1  for ids in input_ids]
+
     masked_lm_ids = np.asarray(masked_lm_ids)
     masked_lm_positions = np.asarray(masked_lm_positions)
     masked_lm_weights = np.asarray(masked_lm_weights)
 
     seqlen = len(tokens[0])
 
-
-    #print(tokens)
-    X_batch = [token for token in tokens] #tokens.reshape(batch_size, seqlen)
-
-    print(X_batch[0])
+    '''print(tokens[0])
     print(input_ids[0])
-    #print('orig: ' + str([reverse_word_index[word+1] for word in masked_lm_ids[0]]))
+    # print('orig: ' + str([reverse_word_index[word+1] for word in masked_lm_ids[0]]))
     print(masked_lm_positions[0])
     print(masked_lm_weights[0])
 
     print('ORIGS')
     for i in masked_lm_ids:
-        print(str([reverse_word_index[word + 1] for word in i]))
+        print(str([w2v_model.wv.index2word[word] for word in i]))
     print('END')
 
-    #print("to predict: " + str([reverse_word_index[word] for word in masked_lm_ids]))
+    #print("to predict: " + str([reverse_word_index[word] for word in masked_lm_ids]))'''
 
-    w2v_model = train_w2v(articles)
+    tokens = np.asarray(['[CLS]', 'tv', 'future', '[MASK]', 'viewers', 'home', 'theatre', '[MASK]',
+     'plasma','high-definition', 'tvs', 'digital', '[MASK]', 'recorders', '[SEP]'])
+
+    print(tokens)
+    input_ids = []
+    input_ids.append([w2v_model.wv.vocab.get(token).index if w2v_model.wv.vocab.get(token) is not None else 0 for token in tokens])
+    input_ids = np.asarray(input_ids)
+    print(input_ids)
+    masked_lm_positions = np.asarray([3, 7, 12])
+    print(masked_lm_positions)
+    masked_lm_weights = [1.]*len(input_ids)
+    print(masked_lm_weights)
+    masked_lm_ids = np.asarray([w2v_model.wv.vocab.get('hands').index, w2v_model.wv.vocab.get('systems').index, w2v_model.wv.vocab.get('video').index])
+    print(masked_lm_ids)
 
 
-    embedding_matrix = get_embedding_matrix(w2v_model)
 
 
     model = BiRNNWithPooling(1, seqlen, num_hidden, learning_rate, num_classes, dropout_keep_prob, pooling, use_embedding_layer, embedding_matrix)
@@ -213,16 +226,20 @@ def train_model():
         sess.run(init)
         feed_dict = {model.X: input_ids, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids,
                      model.label_weights: masked_lm_weights}
-        for i in range(1):
-            if i % 100 == 0:
-                print(i)
-                #print(sess.run(model.out, feed_dict))
+        for i in range(100000):
+
+            #print(sess.run(model.out, feed_dict).shape)
+            out = np.argmax(sess.run(model.out, feed_dict), axis=-1)
+            for o in out:
+                print(w2v_model.wv.index2word[o])
+            print('###')
+                #print((sess.run(model.out, feed_dict)[1]))
             model.train_masked_lm(sess, feed_dict)
 
         result = sess.run(model.out, feed_dict)
-        print(result.shape)
-        print('res: ' + str(np.argmax(result, axis=-1)))
-        print('prediction: ' + str([reverse_word_index[word+1] for word in np.argmax(result, axis=-1)]))
+        #print(result.shape)
+        #print('res: ' + str(np.argmax(result, axis=-1)))
+        #print('prediction: ' + str([reverse_word_index[word] for word in np.argmax(result, axis=-1)]))
 
     '''       if epoch % 100 == 0:
                 feed_dict = {model.X: X_batch, model.y: y_batch}
