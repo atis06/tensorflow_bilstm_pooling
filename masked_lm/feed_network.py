@@ -175,7 +175,7 @@ def preprocess_data_gen():
             masked_lm_weights_gathered), np.asarray(masked_lm_ids)
 
 
-def preprocess_data():
+'''def preprocess_data():
     output_tokens = []
     input_ids = []
     masked_lm_positions = []
@@ -218,7 +218,7 @@ def preprocess_data():
 
         yield np.asarray(output_tokens), np.asarray(input_ids), np.asarray(masked_lm_positions), np.asarray(
             masked_lm_weights), np.asarray(masked_lm_ids)
-        # return output_tokens, np.asarray(input_ids), masked_lm_positions, masked_lm_weights, masked_lm_ids
+        # return output_tokens, np.asarray(input_ids), masked_lm_positions, masked_lm_weights, masked_lm_ids'''
 
 
 def extract_data(data):
