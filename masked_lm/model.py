@@ -5,7 +5,7 @@ import numpy as np
 
 class BiRNNWithPooling:
 
-    def __init__(self, num_inputs, num_time_steps, num_hidden, learning_rate, num_classes, dropout_keep_prob, pooling, use_embedding_layer, embedding_matrix):
+    def __init__(self, num_inputs, num_time_steps, num_hidden, learning_rate, dropout_keep_prob, pooling, use_embedding_layer, embedding_matrix):
         # Just one feature, the time series(embeddig dim)
         self.num_inputs = num_inputs
         # Num of steps in each batch (seqlength)
@@ -14,8 +14,6 @@ class BiRNNWithPooling:
         self.num_hidden = num_hidden
         # Learning rate you can play with this
         self.learning_rate = learning_rate
-        # Num of classes
-        self.num_classes = num_classes
         # Dropout keep probability (can be None)
         self.dropout_keep_prob = dropout_keep_prob
         # Pooling (max, avg, None)
@@ -25,9 +23,16 @@ class BiRNNWithPooling:
 
         self.embedding_matrix = embedding_matrix
 
-        if self.use_embedding_layer:
+        '''if self.use_embedding_layer:
             self.saved_embeddings = tf.constant(embedding_matrix, dtype=tf.float32)
-            self.embedding = tf.Variable(initial_value=self.saved_embeddings, trainable=False)
+            self.embedding = tf.Variable(initial_value=self.saved_embeddings, trainable=False, dtype=tf.float32)'''
+
+        if self.use_embedding_layer:
+            self.saved_embeddings = tf.placeholder(dtype=embedding_matrix.dtype, shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]])
+            self.trained_embedding = tf.get_variable(name='embedding', shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]], trainable=False, dtype=tf.float64)
+            unk_embedding = tf.get_variable(name="unk_embedding", shape=[1, embedding_matrix.shape[1]], initializer=tf.zeros_initializer, trainable=False, dtype=tf.float64)
+            self.embedding = tf.concat([self.trained_embedding, unk_embedding], axis=0)
+            #self.embedding = tf.Variable(initial_value=self.saved_embeddings, trainable=False, dtype=tf.float64)
 
         self.X = tf.placeholder(tf.int32, [None, self.num_time_steps])
 
@@ -35,21 +40,12 @@ class BiRNNWithPooling:
 
         self.optimizer, self.loss, self.output_logits, self.out = self.__get_masked_lm_network()
 
-
-
-
     def __init_placeholders_masked_lm(self):
         positions = tf.placeholder(tf.int32)
         label_ids = tf.placeholder(tf.int32)
         label_weights = tf.placeholder(tf.float64)
 
         return positions, label_ids, label_weights
-
-    '''def __init_variables(self):
-        W = tf.Variable(tf.random_normal(shape=[2 * self.num_hidden, self.num_classes]), dtype=tf.float32)
-        b = tf.Variable(tf.ones([self.num_classes], dtype=tf.float32))
-
-        return W, b'''
 
     def __biRNN(self, input, full_output = False):
         with tf.variable_scope("birnn_pool"):
@@ -62,7 +58,7 @@ class BiRNNWithPooling:
                     bw_cell=tf.contrib.rnn.DropoutWrapper(bw_cell,output_keep_prob=self.dropout_keep_prob)
 
             outputs, _ = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, input,
-                                                         dtype=tf.float32)
+                                                         dtype=tf.float64)
 
             output_rnn = tf.concat(outputs, axis=2)  # [batch_size,sequence_length,hidden_size]
 
@@ -108,6 +104,7 @@ class BiRNNWithPooling:
         vocab_size = self.embedding_matrix.shape[0]
         embedding_size = self.embedding_matrix.shape[1]
 
+
         # RNN
         self.embed = tf.nn.embedding_lookup(self.embedding, self.X)
         rnn_output = self.__biRNN(self.embed, True)
@@ -118,8 +115,6 @@ class BiRNNWithPooling:
 
         input_tensor = tf.layers.dense(input_tensor, units=embedding_size, activation=self.gelu, kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
 
-        out = input_tensor
-
         input_tensor = utils.layer_norm(input_tensor)
 
         input_tensor = tf.cast(input_tensor, tf.float64)
@@ -129,7 +124,7 @@ class BiRNNWithPooling:
         output_bias = tf.get_variable(name='output_bias',
             shape=[vocab_size],
             initializer=tf.zeros_initializer(), dtype=tf.float64)
-        logits = tf.matmul(input_tensor, self.embedding_matrix, transpose_b=True) # * [vocab_size, embedding_size]
+        logits = tf.matmul(input_tensor, self.trained_embedding, transpose_b=True) # * [vocab_size, embedding_size]
         logits = tf.nn.bias_add(logits, output_bias)
 
         log_probs = tf.nn.log_softmax(logits, axis=-1)
@@ -147,7 +142,7 @@ class BiRNNWithPooling:
 
         optimizer = self.__optimizer(loss)
 
-        out = log_probs
+        out = (loss, log_probs)
 
         return optimizer, loss, logits, out
 
