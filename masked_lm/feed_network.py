@@ -266,8 +266,6 @@ with tf.Session() as sess:
             data = np.asarray(data).reshape(-1, 5)
             tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids = extract_data(data)
 
-            print(tokens)
-
             feed_dict = {model.X: input_ids, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids,
                          model.label_weights: masked_lm_weights}
             model.train_masked_lm(sess, feed_dict)
