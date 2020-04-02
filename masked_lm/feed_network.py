@@ -42,6 +42,7 @@ use_embedding_layer = True
 epochs = 5
 
 random_seed = 733459
+mask_padding = True
 
 # End of config
 
@@ -101,7 +102,7 @@ def mask(tokens):
     cand_indexes = []
     for (i, token) in enumerate(tokens):
         # Don't mask padding
-        if token == '[PAD]':
+        if not mask_padding and token == '[PAD]':
             continue
 
         cand_indexes.append([i])
@@ -265,6 +266,9 @@ with tf.Session() as sess:
             c = i
             data = np.asarray(data).reshape(-1, 5)
             tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids = extract_data(data)
+
+            print(tokens)
+            print(masked_lm_weights)
 
             feed_dict = {model.X: input_ids, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids,
                          model.label_weights: masked_lm_weights}
