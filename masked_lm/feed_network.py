@@ -21,26 +21,31 @@ w2v_dim = 300
 tokens_path = 'token'
 
 batch_size = 5
-min_sentence_length = 5
+min_sentence_length = 6
 
-max_sentence_length = 14
+max_sentence_length = 30
 
 # masking prediction for all data
 masked_lm_prob = 0.8
 # number of tokens to mask in a sequence
-max_predictions_per_seq = 2
+max_predictions_per_seq = 5
 
 # network config
 num_inputs = 1
-num_time_steps = max_sentence_length
-num_hidden = 512
-learning_rate = 0.001
-dropout_keep_prob = 1
+
+num_hidden = 1024
+learning_rate = 0.0001
+dropout_keep_prob = 0.8
 pooling = 'max'
 use_embedding_layer = True
 
-epochs = 1
+epochs = 5
 
+random_seed = 733459
+
+# End of config
+
+num_time_steps = max_sentence_length
 
 def get_embedding_matrix(w2v_model):
     embedding_matrix = np.zeros((len(w2v_model.wv.vocab), w2v_dim))
@@ -253,12 +258,15 @@ with tf.Session() as sess:
         c = 0
         epoch_loss = 0
         print('Epoch: ' + str(epoch + 1))
+        random.seed(random_seed)
         data_gen = preprocess_data_gen()
 
         for i, data in enumerate(chunks(data_gen)):
             c = i
             data = np.asarray(data).reshape(-1, 5)
             tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids = extract_data(data)
+
+            print(tokens)
 
             feed_dict = {model.X: input_ids, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids,
                          model.label_weights: masked_lm_weights}
