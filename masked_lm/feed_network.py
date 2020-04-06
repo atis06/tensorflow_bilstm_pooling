@@ -5,12 +5,24 @@ import numpy as np
 import nltk
 from nltk.tokenize import word_tokenize
 import collections
+import os
 
 nltk.download('punkt')
 from itertools import islice, chain
 import random
 import tensorflow as tf
-from masked_lm.model import BiRNNWithPooling
+from model import BiRNNWithPooling
+
+config = tf.ConfigProto(
+        device_count = {'GPU': 0}
+    )
+
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
+if tf.test.gpu_device_name():
+    print('GPU found')
+else:
+    print("No GPU found")
 
 # Config
 save_model_to = './model/mlm_model.ckpt'
@@ -18,7 +30,7 @@ save_model_to = './model/mlm_model.ckpt'
 w2v_model = Word2Vec.load('./model/enc-hu-oscar-hun-spacy.w2v')
 w2v_dim = 300
 
-tokens_path = 'token'
+tokens_path = 'token/hungarian_spacy'
 
 batch_size = 5
 min_sentence_length = 6
@@ -252,7 +264,7 @@ init = tf.global_variables_initializer()
 
 saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, "birnn"))
 
-with tf.Session() as sess:
+with tf.Session(config=configx) as sess:
     sess.run(init)
     sess.run(model.trained_embedding.assign(model.saved_embeddings), {model.saved_embeddings: embedding_matrix})
     for epoch in range(epochs):
@@ -267,8 +279,8 @@ with tf.Session() as sess:
             data = np.asarray(data).reshape(-1, 5)
             tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids = extract_data(data)
 
-            print(tokens)
-            print(masked_lm_weights)
+            #print(tokens)
+            #print(masked_lm_weights)
 
             feed_dict = {model.X: input_ids, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids,
                          model.label_weights: masked_lm_weights}
