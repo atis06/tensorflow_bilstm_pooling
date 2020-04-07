@@ -11,7 +11,7 @@ nltk.download('punkt')
 from itertools import islice, chain
 import random
 import tensorflow as tf
-from model import BiRNNWithPooling
+from masked_lm.model import BiRNNWithPooling
 
 config = tf.ConfigProto(
         device_count = {'GPU': 0}
@@ -268,14 +268,14 @@ with tf.Session(config=configx) as sess:
     sess.run(init)
     sess.run(model.trained_embedding.assign(model.saved_embeddings), {model.saved_embeddings: embedding_matrix})
     for epoch in range(epochs):
-        c = 0
+        c = 1
         epoch_loss = 0
         print('Epoch: ' + str(epoch + 1))
         random.seed(random_seed)
         data_gen = preprocess_data_gen()
 
         for i, data in enumerate(chunks(data_gen)):
-            c = i
+            c = i + 1
             data = np.asarray(data).reshape(-1, 5)
             tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids = extract_data(data)
 

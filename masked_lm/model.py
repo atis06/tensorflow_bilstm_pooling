@@ -62,22 +62,21 @@ class BiRNNWithPooling:
 
             output_rnn = tf.concat(outputs, axis=2)  # [batch_size,sequence_length,hidden_size]
 
-        if full_output:
-            return output_rnn
+        return output_rnn
+
+    def get_output_with_pooling(self, output_rnn):
+        # this is pooling
+        if self.pooling is not None:
+            if self.pooling == 'max':
+                output_rnn_last = tf.reduce_max(output_rnn,axis=1)  # [batch_size,hidden_size]
+            if self.pooling == 'avg':
+                output_rnn_last = tf.reduce_mean(output_rnn, axis=1)
         else:
-            # this is pooling
-            if self.pooling is not None:
-                if self.pooling == 'max':
-                    output_rnn_last = tf.reduce_max(output_rnn,axis=1)  # [batch_size,hidden_size]
-                if self.pooling == 'avg':
-                    output_rnn_last = tf.reduce_mean(output_rnn, axis=1)
-            else:
-                # this uses the last hidden state as the representation.
-                # [batch_size,hidden_size]
-                output_rnn_last = output_rnn[:,-1,:]
+            # this uses the last hidden state as the representation.
+            # [batch_size,hidden_size]
+            output_rnn_last = output_rnn[:,-1,:]
 
-
-            return output_rnn_last
+        return output_rnn_last
 
 
     def print_shape(self, varname, var):
@@ -108,6 +107,7 @@ class BiRNNWithPooling:
         # RNN
         self.embed = tf.nn.embedding_lookup(self.embedding, self.X)
         rnn_output = self.__biRNN(self.embed, True)
+        rnn_output_2 = self.get_output_with_pooling(rnn_output)
 
 
         # MASKED LM
