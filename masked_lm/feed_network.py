@@ -40,7 +40,7 @@ max_sentence_length = 30
 # masking prediction for all data
 masked_lm_prob = 0.8
 # number of tokens to mask in a sequence
-max_predictions_per_seq = 5
+max_predictions_per_seq = max_sentence_length * masked_lm_prob # from bert github
 
 # network config
 num_inputs = 1
@@ -264,7 +264,7 @@ init = tf.global_variables_initializer()
 
 saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, "birnn"))
 
-with tf.Session(config=configx) as sess:
+with tf.Session(config=config) as sess:
     sess.run(init)
     sess.run(model.trained_embedding.assign(model.saved_embeddings), {model.saved_embeddings: embedding_matrix})
     for epoch in range(epochs):
