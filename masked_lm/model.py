@@ -37,6 +37,7 @@ class BiRNNWithPooling:
         self.X = tf.placeholder(tf.int32, [None, self.num_time_steps])
 
         self.positions, self.label_ids, self.label_weights = self.__init_placeholders_masked_lm()
+        self.sentence_labels = self.__init_placeholders_next_sentence()
 
         self.optimizer, self.loss, self.output_logits, self.out = self.__get_masked_lm_network()
 
@@ -46,6 +47,11 @@ class BiRNNWithPooling:
         label_weights = tf.placeholder(tf.float64)
 
         return positions, label_ids, label_weights
+
+    def __init_placeholders_next_sentence(self):
+        sentence_labels = tf.placeholder(tf.int32)
+
+        return sentence_labels
 
     def __biRNN(self, input, full_output = False):
         with tf.variable_scope("birnn_pool"):
@@ -107,7 +113,7 @@ class BiRNNWithPooling:
         # RNN
         self.embed = tf.nn.embedding_lookup(self.embedding, self.X)
         rnn_output = self.__biRNN(self.embed, True)
-        rnn_output_2 = self.get_output_with_pooling(rnn_output)
+        rnn_output_pooled = self.get_output_with_pooling(rnn_output)
 
 
         # MASKED LM
@@ -138,11 +144,29 @@ class BiRNNWithPooling:
         per_example_loss = -tf.reduce_sum(log_probs * one_hot_labels, axis=[-1])
         numerator = tf.reduce_sum(label_weights * per_example_loss)
         denominator = tf.reduce_sum(label_weights) + 1e-5
-        loss = numerator / denominator
+        loss_mlm = numerator / denominator
+
+        # NEXT SENTENCE
+        output_weights_ns = tf.get_variable(
+            "output_weights_ns",
+            shape=[2, self.num_hidden],
+            initializer=tf.truncated_normal_initializer(stddev=0.02), dtype=tf.float64)
+        output_bias_ns = tf.get_variable(
+            "output_bias_ns", shape=[2], initializer=tf.zeros_initializer(), dtype=tf.float64)
+
+        logits = tf.matmul(rnn_output_pooled, output_weights_ns, transpose_b=True)
+        logits = tf.nn.bias_add(logits, output_bias_ns)
+        log_probs = tf.nn.log_softmax(logits, axis=-1)
+        labels = tf.reshape(self.sentence_labels, [-1])
+        one_hot_labels = tf.one_hot(labels, depth=2, dtype=tf.float64)
+        per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
+        loss_next_sentence = tf.reduce_mean(per_example_loss)
+
+        loss = loss_mlm + loss_next_sentence
 
         optimizer = self.__optimizer(loss)
 
-        out = (loss, log_probs)
+        out = (loss, log_probs, loss_mlm, loss_next_sentence)
 
         return optimizer, loss, logits, out
 

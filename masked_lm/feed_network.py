@@ -6,9 +6,10 @@ import nltk
 from nltk.tokenize import word_tokenize
 import collections
 import os
+import sys
 
-nltk.download('punkt')
-from itertools import islice, chain
+#nltk.download('punkt')
+from itertools import islice, chain, tee
 import random
 import tensorflow as tf
 from masked_lm.model import BiRNNWithPooling
@@ -32,33 +33,35 @@ w2v_dim = 300
 
 tokens_path = 'token/hungarian_spacy'
 
-batch_size = 5
-min_sentence_length = 6
+batch_size = 1
+min_sentence_length = 3
 
-max_sentence_length = 30
+max_sentence_length = 8
 
 # masking prediction for all data
 masked_lm_prob = 0.8
 # number of tokens to mask in a sequence
-max_predictions_per_seq = max_sentence_length * masked_lm_prob # from bert github
+max_predictions_per_seq = 1 #2 * max_sentence_length * masked_lm_prob # from bert github
 
 # network config
 num_inputs = 1
 
-num_hidden = 1024
-learning_rate = 0.0001
-dropout_keep_prob = 0.8
+num_hidden = 512
+learning_rate = 0.05
+dropout_keep_prob = 1
 pooling = 'max'
 use_embedding_layer = True
 
-epochs = 5
+epochs = 100
 
 random_seed = 733459
 mask_padding = True
 
 # End of config
+random.seed(random_seed)
 
-num_time_steps = max_sentence_length
+num_time_steps = 2 * max_sentence_length + 1
+w2v_vocab_len = len(w2v_model.wv.vocab)
 
 def get_embedding_matrix(w2v_model):
     embedding_matrix = np.zeros((len(w2v_model.wv.vocab), w2v_dim))
@@ -72,6 +75,11 @@ def get_embedding_matrix(w2v_model):
 
 embedding_matrix = get_embedding_matrix(w2v_model)
 
+def pairwise(iterable):
+    a, b = tee(iterable)
+    next(b, None)
+    return zip(a, b)
+
 
 def get_tokens():
     path = '.'
@@ -82,14 +90,17 @@ def get_tokens():
         in_file_name = join(text_path, file)
         in_file = open(in_file_name)
         try:
-
             try:
-                for line in in_file:
-                    clean_line = line.strip()
-                    if clean_line != "":
-                        tokens = word_tokenize(clean_line)
-                        if min_sentence_length <= len(tokens):
-                            yield tokens
+                whole_file_content = in_file.read().strip()
+                doc_tokens = word_tokenize(whole_file_content)
+
+                doc_tokens = [doc_tokens[i * max_sentence_length:(i + 1) * max_sentence_length] for i in range((len(doc_tokens) + max_sentence_length - 1) // max_sentence_length )]
+                for tokens in doc_tokens:
+                    if min_sentence_length <= len(tokens):
+                        if len(tokens) < max_sentence_length:
+                            yield tokens + ['[PAD]' for i in range(max_sentence_length - len(tokens))], file
+                        else:
+                            yield tokens, file
             except Exception as e:
                 print(e)
         except Exception as e:
@@ -114,7 +125,7 @@ def mask(tokens):
     cand_indexes = []
     for (i, token) in enumerate(tokens):
         # Don't mask padding
-        if not mask_padding and token == '[PAD]':
+        if token == '[SEP]' or (not mask_padding and token == '[PAD]'):
             continue
 
         cand_indexes.append([i])
@@ -170,27 +181,72 @@ def mask(tokens):
     return output_tokens, masked_lm_positions, masked_lm_labels
 
 
+def get_random_sentence(except_file):
+    path = '.'
+    text_path = join(path, tokens_path)
+
+    # Can't open the data itself
+    onlyfiles = [f for f in listdir(text_path) if isfile(join(text_path, f))] # TODO: .remove(except_file)
+    file = onlyfiles[random.randint(0, len(onlyfiles) - 1)]
+    in_file_name = join(text_path, file)
+    in_file = open(in_file_name)
+    try:
+        try:
+            whole_file_content = in_file.read().strip()
+            doc_tokens = word_tokenize(whole_file_content)
+
+            while (len(doc_tokens) < max_sentence_length):
+                file = onlyfiles[random.randint(0, len(onlyfiles) - 1)]
+                in_file_name = join(text_path, file)
+                in_file = open(in_file_name)
+                whole_file_content = in_file.read().strip()
+                doc_tokens = word_tokenize(whole_file_content)
+
+            doc_tokens = [doc_tokens[i * max_sentence_length:(i + 1) * max_sentence_length] for i in range((len(doc_tokens) + max_sentence_length - 1) // max_sentence_length )]
+
+            if len(doc_tokens) > 1:
+                return doc_tokens[random.randint(0, len(doc_tokens) - 2)]
+            else:
+                return doc_tokens[0]
+
+        except Exception as e:
+            print(e)
+            sys.exit(1)
+    except Exception as e:
+        print('error', e)
+        in_file.close()
+        sys.exit(1)
+
+
 def preprocess_data_gen():
-    for sentence in get_tokens():
-        if len(sentence) < max_sentence_length:
-            tokens = sentence + ['[PAD]' for i in range(max_sentence_length - len(sentence))]
+    sentence_iterator = get_tokens()
+    for A, B in pairwise(sentence_iterator):
+        sentence_A, file_A = A
+        sentence_B, file_B = B
+
+        is_next_sentence = 1
+
+        if file_A != file_B:
+            continue
+
+        if random.random() < 0.5:
+            sentence = sentence_A + ['[SEP]'] + get_random_sentence(file_B)
+            is_next_sentence = 0
         else:
-            tokens = sentence[0:max_sentence_length]
+            sentence = sentence_A + ['[SEP]'] + sentence_B
 
-        w2v_vocab_len = len(w2v_model.wv.vocab)
         input_ids = [w2v_model.wv.vocab.get(token).index if w2v_model.wv.vocab.get(token) is not None else w2v_vocab_len
-                     for token in tokens]
+                     for token in sentence]
 
-        ret_output_tokens, ret_masked_lm_positions, ret_masked_lm_labels = mask(tokens)
-        masked_lm_weights_full_sentence = np.asarray(
-            [1.] * len(sentence) + [0.] * (max_sentence_length - len(sentence)))
+        ret_output_tokens, ret_masked_lm_positions, ret_masked_lm_labels = mask(sentence)
+        masked_lm_weights_full_sentence = np.asarray([1. if token != "[PAD]" else 0. for token in sentence])
         masked_lm_weights_gathered = masked_lm_weights_full_sentence.take(ret_masked_lm_positions)
         masked_lm_ids = np.asarray(
             [w2v_model.wv.vocab.get(label).index if w2v_model.wv.vocab.get(label) is not None else w2v_vocab_len for
              label in ret_masked_lm_labels])
 
         yield np.asarray(ret_output_tokens), np.asarray(input_ids), np.asarray(ret_masked_lm_positions), np.asarray(
-            masked_lm_weights_gathered), np.asarray(masked_lm_ids)
+            masked_lm_weights_gathered), np.asarray(masked_lm_ids), is_next_sentence
 
 
 '''def preprocess_data():
@@ -245,6 +301,7 @@ def extract_data(data):
     masked_lm_positions = []
     masked_lm_weights = []
     masked_lm_ids = []
+    sentence_labels = []
 
     for elem in data:
         output_tokens.append(elem[0])
@@ -252,9 +309,10 @@ def extract_data(data):
         masked_lm_positions.append(elem[2])
         masked_lm_weights.append(elem[3])
         masked_lm_ids.append(elem[4])
+        sentence_labels.append(elem[5])
 
     return np.asarray(output_tokens), np.asarray(input_ids), np.asarray(masked_lm_positions), np.asarray(
-        masked_lm_weights), np.asarray(masked_lm_ids)
+        masked_lm_weights), np.asarray(masked_lm_ids), np.asarray(sentence_labels)
 
 
 model = BiRNNWithPooling(num_inputs, num_time_steps, num_hidden, learning_rate, dropout_keep_prob, pooling,
@@ -276,14 +334,19 @@ with tf.Session(config=config) as sess:
 
         for i, data in enumerate(chunks(data_gen)):
             c = i + 1
-            data = np.asarray(data).reshape(-1, 5)
-            tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids = extract_data(data)
+            data = np.asarray(data).reshape(-1, 6)
+            tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids, sentence_labels = extract_data(data)
 
-            #print(tokens)
-            #print(masked_lm_weights)
+            print(tokens)
+            print(input_ids)
+            print(masked_lm_positions)
+            print(masked_lm_weights)
+            print(masked_lm_ids)
+            print(sentence_labels)
+            print('###')
 
             feed_dict = {model.X: input_ids, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids,
-                         model.label_weights: masked_lm_weights}
+                         model.label_weights: masked_lm_weights, model.sentence_labels: sentence_labels}
             model.train_masked_lm(sess, feed_dict)
 
             pred = sess.run(model.out, feed_dict)[1]
@@ -292,8 +355,12 @@ with tf.Session(config=config) as sess:
             per_batch_loss = sess.run(model.out, feed_dict)[0]
             epoch_loss += per_batch_loss
 
+            mlm, next_sentence = sess.run(model.out, feed_dict)[2], sess.run(model.out, feed_dict)[3]
+
         epoch_loss = epoch_loss / c
         print('Epoch loss: ' + str(epoch_loss))
+        print('MLM: ' + str(mlm))
+        print('Next_sentence: ' + str(next_sentence))
         print('------------------------------------------------------------')
 
     print('Saving weights...')
