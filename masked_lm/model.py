@@ -90,7 +90,7 @@ class BiRNNWithPooling:
             print('{0} : {1}'.format(varname, tf.shape(var, name=None)))
 
     def __optimizer(self, loss):
-        optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(loss)
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate).minimize(loss)
 
         return optimizer
 

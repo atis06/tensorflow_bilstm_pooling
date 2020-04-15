@@ -31,28 +31,28 @@ save_model_to = './model/mlm_model.ckpt'
 w2v_model = Word2Vec.load('./model/enc-hu-oscar-hun-spacy.w2v')
 w2v_dim = 300
 
-tokens_path = 'token/hungarian_spacy'
+tokens_path = 'asd'
 
-batch_size = 1
+batch_size = 64
 min_sentence_length = 3
 
 max_sentence_length = 8
 
 # masking prediction for all data
-masked_lm_prob = 0.8
+masked_lm_prob = 0.15
 # number of tokens to mask in a sequence
-max_predictions_per_seq = 1 #2 * max_sentence_length * masked_lm_prob # from bert github
+max_predictions_per_seq = (max_sentence_length * masked_lm_prob) * 2 # from bert github
 
 # network config
 num_inputs = 1
 
-num_hidden = 512
-learning_rate = 0.05
-dropout_keep_prob = 1
+num_hidden = 4096
+learning_rate = 0.5
+dropout_keep_prob = 0.5
 pooling = 'max'
 use_embedding_layer = True
 
-epochs = 100
+epochs = 50
 
 random_seed = 733459
 mask_padding = True
@@ -185,8 +185,8 @@ def get_random_sentence(except_file):
     path = '.'
     text_path = join(path, tokens_path)
 
-    # Can't open the data itself
-    onlyfiles = [f for f in listdir(text_path) if isfile(join(text_path, f))] # TODO: .remove(except_file)
+    onlyfiles = [f for f in listdir(text_path) if isfile(join(text_path, f))]
+    #onlyfiles.remove(except_file) # Can't open the data itself
     file = onlyfiles[random.randint(0, len(onlyfiles) - 1)]
     in_file_name = join(text_path, file)
     in_file = open(in_file_name)
@@ -204,10 +204,8 @@ def get_random_sentence(except_file):
 
             doc_tokens = [doc_tokens[i * max_sentence_length:(i + 1) * max_sentence_length] for i in range((len(doc_tokens) + max_sentence_length - 1) // max_sentence_length )]
 
-            if len(doc_tokens) > 1:
-                return doc_tokens[random.randint(0, len(doc_tokens) - 2)]
-            else:
-                return doc_tokens[0]
+            returned_sentence = doc_tokens[random.randint(0, len(doc_tokens)-1)]
+            return returned_sentence + ['[PAD]' for i in range(max_sentence_length - len(returned_sentence))]
 
         except Exception as e:
             print(e)
@@ -219,6 +217,8 @@ def get_random_sentence(except_file):
 
 
 def preprocess_data_gen():
+    balancer = 0
+
     sentence_iterator = get_tokens()
     for A, B in pairwise(sentence_iterator):
         sentence_A, file_A = A
@@ -227,13 +227,25 @@ def preprocess_data_gen():
         is_next_sentence = 1
 
         if file_A != file_B:
-            continue
-
-        if random.random() < 0.5:
-            sentence = sentence_A + ['[SEP]'] + get_random_sentence(file_B)
-            is_next_sentence = 0
-        else:
             sentence = sentence_A + ['[SEP]'] + sentence_B
+            is_next_sentence = 0
+            balancer += 1
+        else:
+            if balancer > 0:
+                sentence = sentence_A + ['[SEP]'] + sentence_B
+                is_next_sentence = 1
+                balancer -= 1
+            elif balancer == 0:
+                if random.random() < 0.5:
+                    sentence = sentence_A + ['[SEP]'] + get_random_sentence(file_B)
+                    is_next_sentence = 0
+                else:
+                    sentence = sentence_A + ['[SEP]'] + sentence_B
+                    is_next_sentence = 1
+            else:
+                print('ERROR: balancer is below 0!')
+                sys.exit(1)
+
 
         input_ids = [w2v_model.wv.vocab.get(token).index if w2v_model.wv.vocab.get(token) is not None else w2v_vocab_len
                      for token in sentence]
@@ -324,10 +336,13 @@ saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, "birnn")
 
 with tf.Session(config=config) as sess:
     sess.run(init)
+    # saver.restore(sess, 'model/mlm-model.ckpt')
     sess.run(model.trained_embedding.assign(model.saved_embeddings), {model.saved_embeddings: embedding_matrix})
     for epoch in range(epochs):
         c = 1
         epoch_loss = 0
+        mlm = 0
+        next_sentence = 0
         print('Epoch: ' + str(epoch + 1))
         random.seed(random_seed)
         data_gen = preprocess_data_gen()
@@ -337,13 +352,13 @@ with tf.Session(config=config) as sess:
             data = np.asarray(data).reshape(-1, 6)
             tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids, sentence_labels = extract_data(data)
 
-            print(tokens)
+            '''print(tokens)
             print(input_ids)
             print(masked_lm_positions)
             print(masked_lm_weights)
             print(masked_lm_ids)
             print(sentence_labels)
-            print('###')
+            print('###')'''
 
             feed_dict = {model.X: input_ids, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids,
                          model.label_weights: masked_lm_weights, model.sentence_labels: sentence_labels}
@@ -355,12 +370,19 @@ with tf.Session(config=config) as sess:
             per_batch_loss = sess.run(model.out, feed_dict)[0]
             epoch_loss += per_batch_loss
 
-            mlm, next_sentence = sess.run(model.out, feed_dict)[2], sess.run(model.out, feed_dict)[3]
+            per_batch_loss_mlm = sess.run(model.out, feed_dict)[2]
+            mlm += per_batch_loss_mlm
+
+            per_batch_loss_ns = sess.run(model.out, feed_dict)[3]
+            next_sentence += per_batch_loss_ns
 
         epoch_loss = epoch_loss / c
+        mlm = mlm / c
+        next_sentence = next_sentence / c
+
         print('Epoch loss: ' + str(epoch_loss))
-        print('MLM: ' + str(mlm))
-        print('Next_sentence: ' + str(next_sentence))
+        print('MLM loss: ' + str(mlm))
+        print('Next_sentence loss: ' + str(next_sentence))
         print('------------------------------------------------------------')
 
     print('Saving weights...')
