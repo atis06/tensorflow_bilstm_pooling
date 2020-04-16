@@ -31,10 +31,9 @@ class TrainingInstance(object):
   def __repr__(self):
     return self.__str__()
 
-def layer_norm(input_tensor):
+def layer_norm(input_tensor, name = None):
   """Run layer normalization on the last dimension of the tensor."""
-  return tf.contrib.layers.layer_norm(
-      inputs=input_tensor, begin_norm_axis=-1, begin_params_axis=-1)
+  return tf.keras.layers.LayerNormalization(name=name,axis=-1,epsilon=1e-12,dtype=tf.float64)(input_tensor)
 
 def get_shape_list(tensor, name=None):
   """Returns a list of the shape of tensor, preferring static dimensions.

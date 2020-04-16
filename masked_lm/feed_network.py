@@ -12,14 +12,19 @@ import math
 #nltk.download('punkt')
 from itertools import islice, chain, tee
 import random
-import tensorflow as tf
-from masked_lm.model import BiRNNWithPooling
+import tensorflow.compat.v1 as tf
+#tf.disable_v2_behavior()
+from model import BiRNNWithPooling
+from tensorflow.python.client import device_lib
+tf.compat.v1.disable_eager_execution()
 
-config = tf.ConfigProto(
-        device_count = {'GPU': 0}
-    )
+'''config = tf.ConfigProto(
+        device_count = {'GPU': 1}
+    )'''
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+
 
 if tf.test.gpu_device_name():
     print('GPU found')
@@ -29,10 +34,10 @@ else:
 # Config
 save_model_to = './model/mlm_model.ckpt'
 
-w2v_model = Word2Vec.load('./model/enc-hu-oscar-hun-spacy.w2v')
+w2v_model = Word2Vec.load('/srv/project/encoder/model/w2v/enc-hu-oscar-hun-spacy/enc-hu-oscar-hun-spacy.w2v')
 w2v_dim = 300
 
-tokens_path = 'asd'
+tokens_path = '../../repo/hungarian_spacy/'
 
 batch_size = 64
 min_sentence_length = 10
@@ -187,7 +192,7 @@ def get_random_sentence(except_file):
     text_path = join(path, tokens_path)
 
     onlyfiles = [f for f in listdir(text_path) if isfile(join(text_path, f))]
-    #onlyfiles.remove(except_file) # Can't open the data itself
+    onlyfiles.remove(except_file) # Can't open the data itself
     file = onlyfiles[random.randint(0, len(onlyfiles) - 1)]
     in_file_name = join(text_path, file)
     in_file = open(in_file_name)
@@ -335,7 +340,7 @@ init = tf.global_variables_initializer()
 
 saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, "birnn"))
 
-with tf.Session(config=config) as sess:
+with tf.Session() as sess:
     sess.run(init)
     # saver.restore(sess, 'model/mlm-model.ckpt')
     sess.run(model.trained_embedding.assign(model.saved_embeddings), {model.saved_embeddings: embedding_matrix})
