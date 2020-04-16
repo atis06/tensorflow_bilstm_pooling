@@ -8,6 +8,8 @@ import collections
 import os
 import sys
 import math
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
 
 #nltk.download('punkt')
 from itertools import islice, chain, tee
@@ -18,12 +20,12 @@ from model import BiRNNWithPooling
 from tensorflow.python.client import device_lib
 tf.compat.v1.disable_eager_execution()
 
-'''config = tf.ConfigProto(
-        device_count = {'GPU': 1}
-    )'''
+config = tf.ConfigProto(
+        device_count = {'GPU': 2}
+    )
 
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0, 1'
 
 
 if tf.test.gpu_device_name():
@@ -34,15 +36,15 @@ else:
 # Config
 save_model_to = './model/mlm_model.ckpt'
 
-w2v_model = Word2Vec.load('/srv/project/encoder/model/w2v/enc-hu-oscar-hun-spacy/enc-hu-oscar-hun-spacy.w2v')
+w2v_model = Word2Vec.load('/srv/project/encoder/model/w2v/enc-hu-wiki-hun_spacy/enc-hu-wiki-hun_spacy.w2v')
 w2v_dim = 300
 
 tokens_path = '../../repo/hungarian_spacy/'
 
-batch_size = 64
+batch_size = 8
 min_sentence_length = 10
 
-max_sentence_length = 200
+max_sentence_length = 100
 
 # masking prediction for all data
 masked_lm_prob = 0.15
@@ -340,7 +342,7 @@ init = tf.global_variables_initializer()
 
 saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, "birnn"))
 
-with tf.Session() as sess:
+with tf.Session(config = config) as sess:
     sess.run(init)
     # saver.restore(sess, 'model/mlm-model.ckpt')
     sess.run(model.trained_embedding.assign(model.saved_embeddings), {model.saved_embeddings: embedding_matrix})
@@ -359,6 +361,7 @@ with tf.Session() as sess:
 
         for i, data in enumerate(chunks(data_gen)):
             batches_num = i + 1
+            print(batches_num)
             data = np.asarray(data).reshape(-1, 6)
             tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids, sentence_labels = extract_data(data)
 
