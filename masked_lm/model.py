@@ -55,21 +55,23 @@ class BiRNNWithPooling:
         return sentence_labels
 
     def __biRNN(self, input, full_output = False):
-        with tf.variable_scope("birnn_pool"):
+        strategy = tf.distribute.MirroredStrategy()
+        with strategy.scope():
+            with tf.variable_scope("birnn_pool"):
 
-            fw_cell = tf.nn.rnn_cell.LSTMCell(int(self.num_hidden/2), forget_bias=1.0)
-            bw_cell = tf.nn.rnn_cell.LSTMCell(int(self.num_hidden/2), forget_bias=1.0)
+                fw_cell = tf.nn.rnn_cell.LSTMCell(int(self.num_hidden/2), forget_bias=1.0)
+                bw_cell = tf.nn.rnn_cell.LSTMCell(int(self.num_hidden/2), forget_bias=1.0)
 
-            if self.dropout_keep_prob is not None:
-                    fw_cell=tf.nn.rnn_cell.DropoutWrapper(fw_cell,output_keep_prob=self.dropout_keep_prob)
-                    bw_cell=tf.nn.rnn_cell.DropoutWrapper(bw_cell,output_keep_prob=self.dropout_keep_prob)
+                if self.dropout_keep_prob is not None:
+                        fw_cell=tf.nn.rnn_cell.DropoutWrapper(fw_cell,output_keep_prob=self.dropout_keep_prob)
+                        bw_cell=tf.nn.rnn_cell.DropoutWrapper(bw_cell,output_keep_prob=self.dropout_keep_prob)
 
-            outputs, _ = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, input,
-                                                         dtype=tf.float64)
+                outputs, _ = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, input,
+                                                             dtype=tf.float64)
 
-            output_rnn = tf.concat(outputs, axis=2)  # [batch_size,sequence_length,hidden_size]
+                output_rnn = tf.concat(outputs, axis=2)  # [batch_size,sequence_length,hidden_size]
 
-        return output_rnn
+            return output_rnn
 
     def get_output_with_pooling(self, output_rnn):
         # this is pooling
@@ -106,77 +108,79 @@ class BiRNNWithPooling:
     def __get_masked_lm_network(self):
         """Get loss and log probs for the masked LM."""
 
-        # INIT
-        vocab_size = self.embedding_matrix.shape[0]
-        embedding_size = self.embedding_matrix.shape[1]
+        strategy = tf.distribute.MirroredStrategy()
+        with strategy.scope():
+            # INIT
+            vocab_size = self.embedding_matrix.shape[0]
+            embedding_size = self.embedding_matrix.shape[1]
 
 
-        # RNN
-        with tf.device('/CPU:0'):
-            self.embed = tf.nn.embedding_lookup(self.embedding, self.X)
-        rnn_output = self.__biRNN(self.embed, True)
-        rnn_output_pooled = self.get_output_with_pooling(rnn_output)
+            # RNN
+            with tf.device('/CPU:0'):
+                self.embed = tf.nn.embedding_lookup(self.embedding, self.X)
+            rnn_output = self.__biRNN(self.embed, True)
+            rnn_output_pooled = self.get_output_with_pooling(rnn_output)
 
 
-        # MASKED LM
-        input_tensor = utils.gather_indexes(rnn_output, self.positions)
+            # MASKED LM
+            input_tensor = utils.gather_indexes(rnn_output, self.positions)
 
-        input_tensor = tf.layers.dense(input_tensor, units=embedding_size, activation=self.gelu, kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+            input_tensor = tf.layers.dense(input_tensor, units=embedding_size, activation=self.gelu, kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
 
-        input_tensor = utils.layer_norm(input_tensor)
+            input_tensor = utils.layer_norm(input_tensor)
 
-        input_tensor = tf.cast(input_tensor, tf.float64)
+            input_tensor = tf.cast(input_tensor, tf.float64)
 
-        # The output weights are the same as the input embeddings, but there is
-        # an output-only bias for each token.
-        output_bias = tf.get_variable(name='output_bias',
-            shape=[vocab_size],
-            initializer=tf.zeros_initializer(), dtype=tf.float64)
-        logits = tf.matmul(input_tensor, self.trained_embedding, transpose_b=True) # * [vocab_size, embedding_size]
-        logits = tf.nn.bias_add(logits, output_bias)
+            # The output weights are the same as the input embeddings, but there is
+            # an output-only bias for each token.
+            output_bias = tf.get_variable(name='output_bias',
+                shape=[vocab_size],
+                initializer=tf.zeros_initializer(), dtype=tf.float64)
+            logits = tf.matmul(input_tensor, self.trained_embedding, transpose_b=True) # * [vocab_size, embedding_size]
+            logits = tf.nn.bias_add(logits, output_bias)
 
-        log_probs = tf.nn.log_softmax(logits, axis=-1)
+            log_probs = tf.nn.log_softmax(logits, axis=-1)
 
-        log_probs_mlm = tf.exp(log_probs)
+            log_probs_mlm = tf.exp(log_probs)
 
-        label_ids = tf.reshape(self.label_ids, [-1])
-        label_weights = tf.reshape(self.label_weights, [-1])
+            label_ids = tf.reshape(self.label_ids, [-1])
+            label_weights = tf.reshape(self.label_weights, [-1])
 
-        one_hot_labels = tf.one_hot(
-            label_ids, depth=vocab_size, dtype=tf.float64)
+            one_hot_labels = tf.one_hot(
+                label_ids, depth=vocab_size, dtype=tf.float64)
 
-        per_example_loss = -tf.reduce_sum(log_probs * one_hot_labels, axis=[-1])
-        numerator = tf.reduce_sum(label_weights * per_example_loss)
-        denominator = tf.reduce_sum(label_weights) + 1e-5
-        loss_mlm = numerator / denominator
+            per_example_loss = -tf.reduce_sum(log_probs * one_hot_labels, axis=[-1])
+            numerator = tf.reduce_sum(label_weights * per_example_loss)
+            denominator = tf.reduce_sum(label_weights) + 1e-5
+            loss_mlm = numerator / denominator
 
 
-        # NEXT SENTENCE
-        output_weights_ns = tf.get_variable(
-            "output_weights_ns",
-            shape=[2, self.num_hidden],
-            initializer=tf.truncated_normal_initializer(stddev=0.02), dtype=tf.float64)
-        output_bias_ns = tf.get_variable(
-            "output_bias_ns", shape=[2], initializer=tf.zeros_initializer(), dtype=tf.float64)
+            # NEXT SENTENCE
+            output_weights_ns = tf.get_variable(
+                "output_weights_ns",
+                shape=[2, self.num_hidden],
+                initializer=tf.truncated_normal_initializer(stddev=0.02), dtype=tf.float64)
+            output_bias_ns = tf.get_variable(
+                "output_bias_ns", shape=[2], initializer=tf.zeros_initializer(), dtype=tf.float64)
 
-        logits = tf.matmul(rnn_output_pooled, output_weights_ns, transpose_b=True)
-        logits = tf.nn.bias_add(logits, output_bias_ns)
-        log_probs = tf.nn.log_softmax(logits, axis=-1)
+            logits = tf.matmul(rnn_output_pooled, output_weights_ns, transpose_b=True)
+            logits = tf.nn.bias_add(logits, output_bias_ns)
+            log_probs = tf.nn.log_softmax(logits, axis=-1)
 
-        log_probs_ns = tf.exp(log_probs)
+            log_probs_ns = tf.exp(log_probs)
 
-        labels = tf.reshape(self.sentence_labels, [-1])
-        one_hot_labels = tf.one_hot(labels, depth=2, dtype=tf.float64)
-        per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
-        loss_next_sentence = tf.reduce_mean(per_example_loss)
+            labels = tf.reshape(self.sentence_labels, [-1])
+            one_hot_labels = tf.one_hot(labels, depth=2, dtype=tf.float64)
+            per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
+            loss_next_sentence = tf.reduce_mean(per_example_loss)
 
-        loss = loss_mlm + loss_next_sentence
+            loss = loss_mlm + loss_next_sentence
 
-        optimizer = self.__optimizer(loss)
+            optimizer = self.__optimizer(loss)
 
-        out = (loss, loss_mlm, loss_next_sentence, log_probs_mlm, log_probs_ns)
+            out = (loss, loss_mlm, loss_next_sentence, log_probs_mlm, log_probs_ns)
 
-        return optimizer, loss, logits, out
+            return optimizer, loss, logits, out
 
     def train_masked_lm(self, sess, feed_dict):
         sess.run(self.optimizer, feed_dict)

@@ -343,93 +343,91 @@ init = tf.global_variables_initializer()
 saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, "birnn"))
 
 
-strategy = tf.distribute.MirroredStrategy()
-with strategy.scope():
-    with tf.Session(config = config) as sess:
-        sess.run(init)
-        # saver.restore(sess, 'model/mlm-model.ckpt')
-        sess.run(model.trained_embedding.assign(model.saved_embeddings), {model.saved_embeddings: embedding_matrix})
-        for epoch in range(epochs):
-            batches_num = 1
-            epoch_loss = 0
-            mlm_loss = 0
-            next_sentence_loss = 0
-            correct_mlm = 0
-            all_mlm = 0
-            correct_ns = 0
-            all_ns = 0
-            print('Epoch: ' + str(epoch + 1))
-            random.seed(random_seed)
-            data_gen = preprocess_data_gen()
+with tf.Session(config = config) as sess:
+    sess.run(init)
+    # saver.restore(sess, 'model/mlm-model.ckpt')
+    sess.run(model.trained_embedding.assign(model.saved_embeddings), {model.saved_embeddings: embedding_matrix})
+    for epoch in range(epochs):
+        batches_num = 1
+        epoch_loss = 0
+        mlm_loss = 0
+        next_sentence_loss = 0
+        correct_mlm = 0
+        all_mlm = 0
+        correct_ns = 0
+        all_ns = 0
+        print('Epoch: ' + str(epoch + 1))
+        random.seed(random_seed)
+        data_gen = preprocess_data_gen()
 
-            for i, data in enumerate(chunks(data_gen)):
-                batches_num = i + 1
-                print(batches_num)
-                data = np.asarray(data).reshape(-1, 6)
-                tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids, sentence_labels = extract_data(data)
+        for i, data in enumerate(chunks(data_gen)):
+            batches_num = i + 1
+            print(batches_num)
+            data = np.asarray(data).reshape(-1, 6)
+            tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids, sentence_labels = extract_data(data)
 
-                '''print(tokens)
-                print(input_ids)
-                print(masked_lm_positions)
-                print(masked_lm_weights)
-                print(masked_lm_ids)
-                print(sentence_labels)
-                print('###')'''
+            '''print(tokens)
+            print(input_ids)
+            print(masked_lm_positions)
+            print(masked_lm_weights)
+            print(masked_lm_ids)
+            print(sentence_labels)
+            print('###')'''
 
-                feed_dict = {model.X: input_ids, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids,
-                             model.label_weights: masked_lm_weights, model.sentence_labels: sentence_labels}
-                model.train_masked_lm(sess, feed_dict)
+            feed_dict = {model.X: input_ids, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids,
+                         model.label_weights: masked_lm_weights, model.sentence_labels: sentence_labels}
+            model.train_masked_lm(sess, feed_dict)
 
-                out = sess.run(model.out, feed_dict)
+            out = sess.run(model.out, feed_dict)
 
-                # MLM accuracy
-                pred_mlm = out[3]
-                pred_mlm = np.argmax(pred_mlm, axis=-1).reshape(masked_lm_ids.shape)
+            # MLM accuracy
+            pred_mlm = out[3]
+            pred_mlm = np.argmax(pred_mlm, axis=-1).reshape(masked_lm_ids.shape)
 
-                boolean_mask_mlm = pred_mlm == masked_lm_ids
-                correct_predictions_mlm = np.sum(boolean_mask_mlm[masked_lm_weights == 1.])
-                one_weighted_preds = np.count_nonzero(masked_lm_weights)
+            boolean_mask_mlm = pred_mlm == masked_lm_ids
+            correct_predictions_mlm = np.sum(boolean_mask_mlm[masked_lm_weights == 1.])
+            one_weighted_preds = np.count_nonzero(masked_lm_weights)
 
-                correct_mlm += correct_predictions_mlm
-                all_mlm += one_weighted_preds
+            correct_mlm += correct_predictions_mlm
+            all_mlm += one_weighted_preds
 
-                # Next sentence accuracy
+            # Next sentence accuracy
 
-                pred_ns = out[4]
-                pred_ns = np.argmax(pred_ns, axis=1)
+            pred_ns = out[4]
+            pred_ns = np.argmax(pred_ns, axis=1)
 
-                boolean_mask_ns = pred_ns == sentence_labels
-                correct_preds_ns = np.count_nonzero(boolean_mask_ns)
+            boolean_mask_ns = pred_ns == sentence_labels
+            correct_preds_ns = np.count_nonzero(boolean_mask_ns)
 
-                correct_ns += correct_preds_ns
-                all_ns += len(sentence_labels)
+            correct_ns += correct_preds_ns
+            all_ns += len(sentence_labels)
 
-                #Losses
+            #Losses
 
-                per_batch_loss = out[0]
-                epoch_loss += per_batch_loss
+            per_batch_loss = out[0]
+            epoch_loss += per_batch_loss
 
-                per_batch_loss_mlm = out[1]
-                mlm_loss += per_batch_loss_mlm
+            per_batch_loss_mlm = out[1]
+            mlm_loss += per_batch_loss_mlm
 
-                per_batch_loss_ns = out[2]
-                next_sentence_loss += per_batch_loss_ns
+            per_batch_loss_ns = out[2]
+            next_sentence_loss += per_batch_loss_ns
 
-            epoch_loss = epoch_loss / batches_num
-            mlm = mlm_loss / batches_num
-            next_sentence = next_sentence_loss / batches_num
-            mlm_acc = correct_mlm / all_mlm
-            ns_acc = correct_ns / all_ns
+        epoch_loss = epoch_loss / batches_num
+        mlm = mlm_loss / batches_num
+        next_sentence = next_sentence_loss / batches_num
+        mlm_acc = correct_mlm / all_mlm
+        ns_acc = correct_ns / all_ns
 
-            print('Epoch loss: ' + str(epoch_loss))
-            print('MLM loss: ' + str(mlm))
-            print('Next_sentence loss: ' + str(next_sentence))
-            print('MLM accuracy: ' + str(mlm_acc))
-            print('Next sentence accuracy: ' + str(ns_acc))
+        print('Epoch loss: ' + str(epoch_loss))
+        print('MLM loss: ' + str(mlm))
+        print('Next_sentence loss: ' + str(next_sentence))
+        print('MLM accuracy: ' + str(mlm_acc))
+        print('Next sentence accuracy: ' + str(ns_acc))
 
-            print('------------------------------------------------------------')
+        print('------------------------------------------------------------')
 
-        print('Saving weights...')
-        saver.save(sess, './model/mlm-model.ckpt')
-        print('Saved.')
-        print('End.')
+    print('Saving weights...')
+    saver.save(sess, './model/mlm-model.ckpt')
+    print('Saved.')
+    print('End.')
