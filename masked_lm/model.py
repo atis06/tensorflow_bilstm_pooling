@@ -28,12 +28,12 @@ class BiRNNWithPooling:
             self.saved_embeddings = tf.constant(embedding_matrix, dtype=tf.float32)
             self.embedding = tf.Variable(initial_value=self.saved_embeddings, trainable=False, dtype=tf.float32)'''
 
-        #with tf.device('/CPU:0'):
-        if self.use_embedding_layer:
-            self.saved_embeddings = tf.placeholder(dtype=embedding_matrix.dtype, shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]])
-            self.trained_embedding = tf.get_variable(name='embedding', shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]], trainable=False, dtype=tf.float64)
-            unk_embedding = tf.get_variable(name="unk_embedding", shape=[1, embedding_matrix.shape[1]], initializer=tf.zeros_initializer, trainable=False, dtype=tf.float64)
-            self.embedding = tf.concat([self.trained_embedding, unk_embedding], axis=0)
+        with tf.device('/GPU:1'):
+            if self.use_embedding_layer:
+                self.saved_embeddings = tf.placeholder(dtype=embedding_matrix.dtype, shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]])
+                self.trained_embedding = tf.get_variable(name='embedding', shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]], trainable=False, dtype=tf.float64)
+                unk_embedding = tf.get_variable(name="unk_embedding", shape=[1, embedding_matrix.shape[1]], initializer=tf.zeros_initializer, trainable=False, dtype=tf.float64)
+                self.embedding = tf.concat([self.trained_embedding, unk_embedding], axis=0)
 
         self.X = tf.placeholder(tf.int32, [None, self.num_time_steps])
 
@@ -107,9 +107,6 @@ class BiRNNWithPooling:
 
     def __get_masked_lm_network(self):
         """Get loss and log probs for the masked LM."""
-
-        strategy = tf.distribute.MirroredStrategy()
-        with strategy.scope():
             # INIT
             vocab_size = self.embedding_matrix.shape[0]
             embedding_size = self.embedding_matrix.shape[1]
