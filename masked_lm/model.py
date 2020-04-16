@@ -55,21 +55,19 @@ class BiRNNWithPooling:
         return sentence_labels
 
     def __biRNN(self, input, full_output = False):
-        strategy = tf.distribute.MirroredStrategy()
-        with strategy.scope():
-            with tf.variable_scope("birnn_pool"):
+        with tf.variable_scope("birnn_pool"):
 
-                fw_cell = tf.nn.rnn_cell.LSTMCell(int(self.num_hidden/2), forget_bias=1.0)
-                bw_cell = tf.nn.rnn_cell.LSTMCell(int(self.num_hidden/2), forget_bias=1.0)
+            fw_cell = tf.nn.rnn_cell.LSTMCell(int(self.num_hidden/2), forget_bias=1.0)
+            bw_cell = tf.nn.rnn_cell.LSTMCell(int(self.num_hidden/2), forget_bias=1.0)
 
-                if self.dropout_keep_prob is not None:
-                        fw_cell=tf.nn.rnn_cell.DropoutWrapper(fw_cell,output_keep_prob=self.dropout_keep_prob)
-                        bw_cell=tf.nn.rnn_cell.DropoutWrapper(bw_cell,output_keep_prob=self.dropout_keep_prob)
+            if self.dropout_keep_prob is not None:
+                    fw_cell=tf.nn.rnn_cell.DropoutWrapper(fw_cell,output_keep_prob=self.dropout_keep_prob)
+                    bw_cell=tf.nn.rnn_cell.DropoutWrapper(bw_cell,output_keep_prob=self.dropout_keep_prob)
 
-                outputs, _ = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, input,
+            outputs, _ = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, input,
                                                              dtype=tf.float64)
 
-                output_rnn = tf.concat(outputs, axis=2)  # [batch_size,sequence_length,hidden_size]
+            output_rnn = tf.concat(outputs, axis=2)  # [batch_size,sequence_length,hidden_size]
 
             return output_rnn
 
