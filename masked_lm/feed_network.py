@@ -7,6 +7,7 @@ from nltk.tokenize import word_tokenize
 import collections
 import os
 import sys
+import math
 
 #nltk.download('punkt')
 from itertools import islice, chain, tee
@@ -34,19 +35,19 @@ w2v_dim = 300
 tokens_path = 'asd'
 
 batch_size = 64
-min_sentence_length = 3
+min_sentence_length = 10
 
-max_sentence_length = 8
+max_sentence_length = 200
 
 # masking prediction for all data
 masked_lm_prob = 0.15
 # number of tokens to mask in a sequence
-max_predictions_per_seq = (max_sentence_length * masked_lm_prob) * 2 # from bert github
+max_predictions_per_seq = math.ceil((max_sentence_length * masked_lm_prob) * 2) # from bert github
 
 # network config
 num_inputs = 1
 
-num_hidden = 4096
+num_hidden = 1024
 learning_rate = 0.5
 dropout_keep_prob = 0.5
 pooling = 'max'
@@ -339,16 +340,20 @@ with tf.Session(config=config) as sess:
     # saver.restore(sess, 'model/mlm-model.ckpt')
     sess.run(model.trained_embedding.assign(model.saved_embeddings), {model.saved_embeddings: embedding_matrix})
     for epoch in range(epochs):
-        c = 1
+        batches_num = 1
         epoch_loss = 0
-        mlm = 0
-        next_sentence = 0
+        mlm_loss = 0
+        next_sentence_loss = 0
+        correct_mlm = 0
+        all_mlm = 0
+        correct_ns = 0
+        all_ns = 0
         print('Epoch: ' + str(epoch + 1))
         random.seed(random_seed)
         data_gen = preprocess_data_gen()
 
         for i, data in enumerate(chunks(data_gen)):
-            c = i + 1
+            batches_num = i + 1
             data = np.asarray(data).reshape(-1, 6)
             tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids, sentence_labels = extract_data(data)
 
@@ -364,25 +369,53 @@ with tf.Session(config=config) as sess:
                          model.label_weights: masked_lm_weights, model.sentence_labels: sentence_labels}
             model.train_masked_lm(sess, feed_dict)
 
-            pred = sess.run(model.out, feed_dict)[1]
-            pred = np.argmax(pred, axis=-1)
+            out = sess.run(model.out, feed_dict)
 
-            per_batch_loss = sess.run(model.out, feed_dict)[0]
+            # MLM accuracy
+            pred_mlm = out[3]
+            pred_mlm = np.argmax(pred_mlm, axis=-1).reshape(masked_lm_ids.shape)
+
+            boolean_mask_mlm = pred_mlm == masked_lm_ids
+            correct_predictions_mlm = np.sum(boolean_mask_mlm[masked_lm_weights == 1.])
+            one_weighted_preds = np.count_nonzero(masked_lm_weights)
+
+            correct_mlm += correct_predictions_mlm
+            all_mlm += one_weighted_preds
+
+            # Next sentence accuracy
+
+            pred_ns = out[4]
+            pred_ns = np.argmax(pred_ns, axis=1)
+
+            boolean_mask_ns = pred_ns == sentence_labels
+            correct_preds_ns = np.count_nonzero(boolean_mask_ns)
+
+            correct_ns += correct_preds_ns
+            all_ns += len(sentence_labels)
+
+            #Losses
+
+            per_batch_loss = out[0]
             epoch_loss += per_batch_loss
 
-            per_batch_loss_mlm = sess.run(model.out, feed_dict)[2]
-            mlm += per_batch_loss_mlm
+            per_batch_loss_mlm = out[1]
+            mlm_loss += per_batch_loss_mlm
 
-            per_batch_loss_ns = sess.run(model.out, feed_dict)[3]
-            next_sentence += per_batch_loss_ns
+            per_batch_loss_ns = out[2]
+            next_sentence_loss += per_batch_loss_ns
 
-        epoch_loss = epoch_loss / c
-        mlm = mlm / c
-        next_sentence = next_sentence / c
+        epoch_loss = epoch_loss / batches_num
+        mlm = mlm_loss / batches_num
+        next_sentence = next_sentence_loss / batches_num
+        mlm_acc = correct_mlm / all_mlm
+        ns_acc = correct_ns / all_ns
 
         print('Epoch loss: ' + str(epoch_loss))
         print('MLM loss: ' + str(mlm))
         print('Next_sentence loss: ' + str(next_sentence))
+        print('MLM accuracy: ' + str(mlm_acc))
+        print('Next sentence accuracy: ' + str(ns_acc))
+
         print('------------------------------------------------------------')
 
     print('Saving weights...')

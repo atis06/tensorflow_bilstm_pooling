@@ -135,6 +135,8 @@ class BiRNNWithPooling:
 
         log_probs = tf.nn.log_softmax(logits, axis=-1)
 
+        log_probs_mlm = tf.exp(log_probs)
+
         label_ids = tf.reshape(self.label_ids, [-1])
         label_weights = tf.reshape(self.label_weights, [-1])
 
@@ -145,6 +147,7 @@ class BiRNNWithPooling:
         numerator = tf.reduce_sum(label_weights * per_example_loss)
         denominator = tf.reduce_sum(label_weights) + 1e-5
         loss_mlm = numerator / denominator
+
 
         # NEXT SENTENCE
         output_weights_ns = tf.get_variable(
@@ -157,6 +160,9 @@ class BiRNNWithPooling:
         logits = tf.matmul(rnn_output_pooled, output_weights_ns, transpose_b=True)
         logits = tf.nn.bias_add(logits, output_bias_ns)
         log_probs = tf.nn.log_softmax(logits, axis=-1)
+
+        log_probs_ns = tf.exp(log_probs)
+
         labels = tf.reshape(self.sentence_labels, [-1])
         one_hot_labels = tf.one_hot(labels, depth=2, dtype=tf.float64)
         per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
@@ -166,7 +172,7 @@ class BiRNNWithPooling:
 
         optimizer = self.__optimizer(loss)
 
-        out = (loss, log_probs, loss_mlm, loss_next_sentence)
+        out = (loss, loss_mlm, loss_next_sentence, log_probs_mlm, log_probs_ns)
 
         return optimizer, loss, logits, out
 
