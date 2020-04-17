@@ -6,7 +6,7 @@ import numpy as np
 
 class BiRNNWithPooling:
 
-    def __init__(self, num_inputs, num_time_steps, num_hidden, learning_rate, dropout_keep_prob, pooling, use_embedding_layer, embedding_matrix):
+    def __init__(self, num_inputs, num_time_steps, num_hidden, learning_rate, dropout_keep_prob, pooling, use_embedding_layer, embedding_matrix_shapes):
         # Just one feature, the time series(embeddig dim)
         self.num_inputs = num_inputs
         # Num of steps in each batch (seqlength)
@@ -22,16 +22,12 @@ class BiRNNWithPooling:
 
         self.use_embedding_layer=use_embedding_layer
 
-        self.embedding_matrix = embedding_matrix
-
-        '''if self.use_embedding_layer:
-            self.saved_embeddings = tf.constant(embedding_matrix, dtype=tf.float32)
-            self.embedding = tf.Variable(initial_value=self.saved_embeddings, trainable=False, dtype=tf.float32)'''
+        self.embedding_matrix_shapes = embedding_matrix
 
         with tf.device('/GPU:1'):
             if self.use_embedding_layer:
-                self.saved_embeddings = tf.placeholder(dtype=embedding_matrix.dtype, shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]])
-                self.trained_embedding = tf.get_variable(name='embedding', shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]], trainable=False, dtype=tf.float64)
+                self.saved_embeddings = tf.placeholder(dtype=tf.float64, shape=[embedding_matrix_shape[0], embedding_matrix_shape[1]])
+                self.trained_embedding = tf.get_variable(name='embedding', shape=[embedding_matrix_shape[0], embedding_matrix_shape[1]], trainable=False, dtype=tf.float64)
                 
         self.X = tf.placeholder(tf.int32, [None, self.num_time_steps])
 
@@ -108,13 +104,13 @@ class BiRNNWithPooling:
         """Get loss and log probs for the masked LM."""
 
         # INIT
-        vocab_size = self.embedding_matrix.shape[0]
-        embedding_size = self.embedding_matrix.shape[1]
+        vocab_size = self.embedding_matrix_shape[0]
+        embedding_size = self.embedding_matrix_shape[1]
 
 
         # RNN
         with tf.device('/GPU:1'):
-            unk_embedding = tf.get_variable(name="unk_embedding", shape=[1, self.embedding_matrix.shape[1]], initializer=tf.zeros_initializer, trainable=False, dtype=tf.float64)
+            unk_embedding = tf.get_variable(name="unk_embedding", shape=[1, self.embedding_matrix_shape[1]], initializer=tf.zeros_initializer, trainable=False, dtype=tf.float64)
             embedding = tf.concat([self.trained_embedding, unk_embedding], axis=0)
             embed = tf.nn.embedding_lookup(embedding, self.X)
         rnn_output = self.__biRNN(embed, True)
