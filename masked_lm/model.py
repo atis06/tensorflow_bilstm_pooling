@@ -114,7 +114,7 @@ class BiRNNWithPooling:
 
         # RNN
         with tf.device('/GPU:1'):
-            unk_embedding = tf.get_variable(name="unk_embedding", shape=[1, embedding_matrix.shape[1]], initializer=tf.zeros_initializer, trainable=False, dtype=tf.float64)
+            unk_embedding = tf.get_variable(name="unk_embedding", shape=[1, self.embedding_matrix.shape[1]], initializer=tf.zeros_initializer, trainable=False, dtype=tf.float64)
             embedding = tf.concat([self.trained_embedding, unk_embedding], axis=0)
             embed = tf.nn.embedding_lookup(embedding, self.X)
         rnn_output = self.__biRNN(embed, True)
