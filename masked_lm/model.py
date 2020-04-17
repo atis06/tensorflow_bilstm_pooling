@@ -6,7 +6,7 @@ import numpy as np
 
 class BiRNNWithPooling:
 
-    def __init__(self, num_inputs, num_time_steps, num_hidden, learning_rate, dropout_keep_prob, pooling, use_embedding_layer, embedding_matrix_shapes):
+    def __init__(self, num_inputs, num_time_steps, num_hidden, learning_rate, dropout_keep_prob, pooling, use_embedding_layer, embedding_matrix_shape):
         # Just one feature, the time series(embeddig dim)
         self.num_inputs = num_inputs
         # Num of steps in each batch (seqlength)
@@ -22,7 +22,7 @@ class BiRNNWithPooling:
 
         self.use_embedding_layer=use_embedding_layer
 
-        self.embedding_matrix_shapes = embedding_matrix
+        self.embedding_matrix_shape = embedding_matrix_shape
 
         with tf.device('/GPU:1'):
             if self.use_embedding_layer:
