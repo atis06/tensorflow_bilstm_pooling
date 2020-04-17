@@ -32,8 +32,7 @@ class BiRNNWithPooling:
             if self.use_embedding_layer:
                 self.saved_embeddings = tf.placeholder(dtype=embedding_matrix.dtype, shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]])
                 self.trained_embedding = tf.get_variable(name='embedding', shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]], trainable=False, dtype=tf.float64)
-                unk_embedding = tf.get_variable(name="unk_embedding", shape=[1, embedding_matrix.shape[1]], initializer=tf.zeros_initializer, trainable=False, dtype=tf.float64)
-                self.embedding = tf.concat([self.trained_embedding, unk_embedding], axis=0)
+                del self.saved_embeddings
 
         self.X = tf.placeholder(tf.int32, [None, self.num_time_steps])
 
@@ -113,8 +112,10 @@ class BiRNNWithPooling:
 
         # RNN
         with tf.device('/GPU:1'):
-            self.embed = tf.nn.embedding_lookup(self.embedding, self.X)
-        rnn_output = self.__biRNN(self.embed, True)
+            unk_embedding = tf.get_variable(name="unk_embedding", shape=[1, embedding_matrix.shape[1]], initializer=tf.zeros_initializer, trainable=False, dtype=tf.float64)
+            embedding = tf.concat([self.trained_embedding, unk_embedding], axis=0)
+            embed = tf.nn.embedding_lookup(embedding, self.X)
+        rnn_output = self.__biRNN(embed, True)
         rnn_output_pooled = self.get_output_with_pooling(rnn_output)
 
 
