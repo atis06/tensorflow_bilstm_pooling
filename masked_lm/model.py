@@ -31,8 +31,7 @@ class BiRNNWithPooling:
         with tf.device('/GPU:1'):
             if self.use_embedding_layer:
                 self.saved_embeddings = tf.placeholder(dtype=embedding_matrix.dtype, shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]])
-                self.trained_embedding = tf.get_variable(name='embedding', shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]], trainable=False, dtype=tf.float64)
-
+                
         self.X = tf.placeholder(tf.int32, [None, self.num_time_steps])
 
         self.positions, self.label_ids, self.label_weights = self.__init_placeholders_masked_lm()
@@ -40,7 +39,6 @@ class BiRNNWithPooling:
 
         self.optimizer, self.loss, self.output_logits, self.out = self.__get_masked_lm_network()
 
-        del self.saved_embeddings
 
     def __init_placeholders_masked_lm(self):
         positions = tf.placeholder(tf.int32)
@@ -115,6 +113,7 @@ class BiRNNWithPooling:
 
         # RNN
         with tf.device('/GPU:1'):
+            trained_embedding = tf.get_variable(name='embedding', shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]], trainable=False, dtype=tf.float64)
             unk_embedding = tf.get_variable(name="unk_embedding", shape=[1, self.embedding_matrix.shape[1]], initializer=tf.zeros_initializer, trainable=False, dtype=tf.float64)
             embedding = tf.concat([self.trained_embedding, unk_embedding], axis=0)
             embed = tf.nn.embedding_lookup(embedding, self.X)
@@ -136,7 +135,8 @@ class BiRNNWithPooling:
         output_bias = tf.get_variable(name='output_bias',
             shape=[vocab_size],
             initializer=tf.zeros_initializer(), dtype=tf.float64)
-        logits = tf.matmul(input_tensor, self.trained_embedding, transpose_b=True) # * [vocab_size, embedding_size]
+        trained_embedding = tf.get_variable(name='embedding', shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]], trainable=False, dtype=tf.float64)
+        logits = tf.matmul(input_tensor, trained_embedding, transpose_b=True) # * [vocab_size, embedding_size]
         logits = tf.nn.bias_add(logits, output_bias)
 
         log_probs = tf.nn.log_softmax(logits, axis=-1)
