@@ -31,6 +31,7 @@ class BiRNNWithPooling:
         with tf.device('/GPU:1'):
             if self.use_embedding_layer:
                 self.saved_embeddings = tf.placeholder(dtype=embedding_matrix.dtype, shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]])
+                self.trained_embedding = tf.get_variable(name='embedding', shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]], trainable=False, dtype=tf.float64)
                 
         self.X = tf.placeholder(tf.int32, [None, self.num_time_steps])
 
@@ -111,9 +112,8 @@ class BiRNNWithPooling:
 
         # RNN
         with tf.device('/GPU:1'):
-            trained_embedding = tf.get_variable(name='embedding', shape=[self.embedding_matrix.shape[0], self.embedding_matrix.shape[1]], trainable=False, dtype=tf.float64)
             unk_embedding = tf.get_variable(name="unk_embedding", shape=[1, self.embedding_matrix.shape[1]], initializer=tf.zeros_initializer, trainable=False, dtype=tf.float64)
-            embedding = tf.concat([trained_embedding, unk_embedding], axis=0)
+            embedding = tf.concat([self.trained_embedding, unk_embedding], axis=0)
             embed = tf.nn.embedding_lookup(embedding, self.X)
         rnn_output = self.__biRNN(embed, True)
         rnn_output_pooled = self.get_output_with_pooling(rnn_output)
@@ -133,8 +133,7 @@ class BiRNNWithPooling:
         output_bias = tf.get_variable(name='output_bias',
             shape=[vocab_size],
             initializer=tf.zeros_initializer(), dtype=tf.float64)
-        trained_embedding = tf.get_variable(name='embedding', shape=[self.embedding_matrix.shape[0], self.embedding_matrix.shape[1]], trainable=False, dtype=tf.float64)
-        logits = tf.matmul(input_tensor, trained_embedding, transpose_b=True) # * [vocab_size, embedding_size]
+        logits = tf.matmul(input_tensor, self.trained_embedding, transpose_b=True) # * [vocab_size, embedding_size]
         logits = tf.nn.bias_add(logits, output_bias)
 
         log_probs = tf.nn.log_softmax(logits, axis=-1)
