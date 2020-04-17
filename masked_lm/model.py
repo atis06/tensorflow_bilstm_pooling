@@ -26,8 +26,8 @@ class BiRNNWithPooling:
 
         with tf.device('/GPU:1'):
             if self.use_embedding_layer:
-                self.saved_embeddings = tf.placeholder(dtype=tf.float64, shape=[embedding_matrix_shape[0], embedding_matrix_shape[1]])
-                self.trained_embedding = tf.get_variable(name='embedding', shape=[embedding_matrix_shape[0], embedding_matrix_shape[1]], trainable=False, dtype=tf.float64)
+                self.saved_embeddings = tf.placeholder(dtype=tf.float64, shape=embedding_matrix_shape)
+                self.trained_embedding = tf.get_variable(name='embedding', shape=embedding_matrix_shape, trainable=False, dtype=tf.float64)
                 
         self.X = tf.placeholder(tf.int32, [None, self.num_time_steps])
 
@@ -100,12 +100,6 @@ class BiRNNWithPooling:
 
     def __get_masked_lm_network(self):
         """Get loss and log probs for the masked LM."""
-
-        # INIT
-        vocab_size = self.embedding_matrix_shape[0]
-        embedding_size = self.embedding_matrix_shape[1]
-
-
         # RNN
         with tf.device('/GPU:1'):
             unk_embedding = tf.get_variable(name="unk_embedding", shape=[1, self.embedding_matrix_shape[1]], initializer=tf.zeros_initializer, trainable=False, dtype=tf.float64)
@@ -118,7 +112,7 @@ class BiRNNWithPooling:
         # MASKED LM
         input_tensor = utils.gather_indexes(rnn_output, self.positions)
 
-        input_tensor = tf.layers.dense(input_tensor, units=embedding_size, activation=self.gelu, kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
+        input_tensor = tf.layers.dense(input_tensor, units=self.embedding_matrix_shape[1], activation=self.gelu, kernel_initializer=tf.truncated_normal_initializer(stddev=0.02))
 
         input_tensor = utils.layer_norm(input_tensor)
 
@@ -127,7 +121,7 @@ class BiRNNWithPooling:
         # The output weights are the same as the input embeddings, but there is
         # an output-only bias for each token.
         output_bias = tf.get_variable(name='output_bias',
-            shape=[vocab_size],
+            shape=[self.embedding_matrix_shape[0]],
             initializer=tf.zeros_initializer(), dtype=tf.float64)
         logits = tf.matmul(input_tensor, self.trained_embedding, transpose_b=True) # * [vocab_size, embedding_size]
         logits = tf.nn.bias_add(logits, output_bias)
@@ -140,7 +134,7 @@ class BiRNNWithPooling:
         label_weights = tf.reshape(self.label_weights, [-1])
 
         one_hot_labels = tf.one_hot(
-            label_ids, depth=vocab_size, dtype=tf.float64)
+            label_ids, depth=self.embedding_matrix_shape[0], dtype=tf.float64)
 
         per_example_loss = -tf.reduce_sum(log_probs * one_hot_labels, axis=[-1])
         numerator = tf.reduce_sum(label_weights * per_example_loss)

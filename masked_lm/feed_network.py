@@ -336,7 +336,7 @@ def extract_data(data):
 
 
 model = BiRNNWithPooling(num_inputs, num_time_steps, num_hidden, learning_rate, dropout_keep_prob, pooling,
-                         use_embedding_layer, embedding_matrix)
+                         use_embedding_layer, embedding_matrix.shape)
 
 init = tf.global_variables_initializer()
 
