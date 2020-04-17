@@ -32,7 +32,6 @@ class BiRNNWithPooling:
             if self.use_embedding_layer:
                 self.saved_embeddings = tf.placeholder(dtype=embedding_matrix.dtype, shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]])
                 self.trained_embedding = tf.get_variable(name='embedding', shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]], trainable=False, dtype=tf.float64)
-                del self.saved_embeddings
 
         self.X = tf.placeholder(tf.int32, [None, self.num_time_steps])
 
@@ -40,6 +39,8 @@ class BiRNNWithPooling:
         self.sentence_labels = self.__init_placeholders_next_sentence()
 
         self.optimizer, self.loss, self.output_logits, self.out = self.__get_masked_lm_network()
+
+        del self.saved_embeddings
 
     def __init_placeholders_masked_lm(self):
         positions = tf.placeholder(tf.int32)
