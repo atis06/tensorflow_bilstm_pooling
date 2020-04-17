@@ -113,7 +113,7 @@ class BiRNNWithPooling:
 
         # RNN
         with tf.device('/GPU:1'):
-            trained_embedding = tf.get_variable(name='embedding', shape=[self.embedding_matrix.shape[0], embedding_matrix.shape[1]], trainable=False, dtype=tf.float64)
+            trained_embedding = tf.get_variable(name='embedding', shape=[self.embedding_matrix.shape[0], self.embedding_matrix.shape[1]], trainable=False, dtype=tf.float64)
             unk_embedding = tf.get_variable(name="unk_embedding", shape=[1, self.embedding_matrix.shape[1]], initializer=tf.zeros_initializer, trainable=False, dtype=tf.float64)
             embedding = tf.concat([self.trained_embedding, unk_embedding], axis=0)
             embed = tf.nn.embedding_lookup(embedding, self.X)
@@ -135,7 +135,7 @@ class BiRNNWithPooling:
         output_bias = tf.get_variable(name='output_bias',
             shape=[vocab_size],
             initializer=tf.zeros_initializer(), dtype=tf.float64)
-        trained_embedding = tf.get_variable(name='embedding', shape=[embedding_matrix.shape[0], embedding_matrix.shape[1]], trainable=False, dtype=tf.float64)
+        trained_embedding = tf.get_variable(name='embedding', shape=[self.embedding_matrix.shape[0], self.embedding_matrix.shape[1]], trainable=False, dtype=tf.float64)
         logits = tf.matmul(input_tensor, trained_embedding, transpose_b=True) # * [vocab_size, embedding_size]
         logits = tf.nn.bias_add(logits, output_bias)
 
