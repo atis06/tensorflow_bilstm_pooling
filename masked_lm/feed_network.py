@@ -45,10 +45,10 @@ w2v_dim = 300
 
 tokens_path = '../../repo/hungarian_spacy/'
 
-batch_size = 8
-min_sentence_length = 10
+batch_size = 12
+min_sentence_length = 3
 
-max_sentence_length = 100
+max_sentence_length = 10
 
 # masking prediction for all data
 masked_lm_prob = 0.15
@@ -59,8 +59,8 @@ max_predictions_per_seq = math.ceil((max_sentence_length * masked_lm_prob) * 2) 
 num_inputs = 1
 
 num_hidden = 1024
-learning_rate = 0.5
-dropout_keep_prob = 0.5
+learning_rate = 0.01
+dropout_keep_prob = 0.8
 pooling = 'max'
 use_embedding_layer = True
 
@@ -76,11 +76,16 @@ num_time_steps = 2 * max_sentence_length + 1
 w2v_vocab_len = len(w2v_model.wv.vocab)
 
 def get_embedding_matrix(w2v_model):
-    embedding_matrix = np.zeros((len(w2v_model.wv.vocab), w2v_dim))
+    embedding_matrix = np.zeros((len(w2v_model.wv.vocab) + 4, w2v_dim + 4))
     for i in range(len(w2v_model.wv.vocab)):
-        embedding_vector = w2v_model.wv[w2v_model.wv.index2word[i]]
+        embedding_vector = np.append(w2v_model.wv[w2v_model.wv.index2word[i]], np.zeros(4))
         if embedding_vector is not None:
             embedding_matrix[i] = embedding_vector
+
+    embedding_matrix[len(w2v_model.wv.vocab)] = np.append(np.zeros(w2v_dim), [1, 0, 0, 0]) # [PAD]
+    embedding_matrix[len(w2v_model.wv.vocab) + 1] = np.append(np.zeros(w2v_dim), [0, 1, 0, 0]) # [MASK]
+    embedding_matrix[len(w2v_model.wv.vocab) + 2] = np.append(np.zeros(w2v_dim), [0, 0, 1, 0]) # [SEP]
+    embedding_matrix[len(w2v_model.wv.vocab) + 3] = np.append(np.zeros(w2v_dim), [0, 0, 0, 1]) # unknown
 
     return embedding_matrix
 
@@ -261,8 +266,19 @@ def preprocess_data_gen():
 
 
         ret_output_tokens, ret_masked_lm_positions, ret_masked_lm_labels = mask(sentence)
-        input_ids = [w2v_model.wv.vocab.get(token).index if w2v_model.wv.vocab.get(token) is not None else w2v_vocab_len
-                     for token in ret_output_tokens]
+        input_ids = []
+        for token in ret_output_tokens:
+            if w2v_model.wv.vocab.get(token) is not None:
+                input_ids.append(w2v_model.wv.vocab.get(token).index)
+            elif token == '[PAD]':
+                input_ids.append(len(w2v_model.wv.vocab))
+            elif token == '[MASK]':
+                input_ids.append(len(w2v_model.wv.vocab) + 1)
+            elif token == '[SEP]':
+                input_ids.append(len(w2v_model.wv.vocab) + 2)
+            else:
+                input_ids.append(len(w2v_model.wv.vocab) + 3)
+
         masked_lm_weights_full_sentence = np.asarray([1. if token != "[PAD]" else 0. for token in sentence])
         masked_lm_weights_gathered = masked_lm_weights_full_sentence.take(ret_masked_lm_positions)
         masked_lm_ids = np.asarray(
