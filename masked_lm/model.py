@@ -24,7 +24,7 @@ class BiRNNWithPooling:
 
         self.embedding_matrix_shape = embedding_matrix_shape
 
-        with tf.device('/CPU:0'):
+        with tf.device('/GPU:1'):
             if self.use_embedding_layer:
                 self.saved_embeddings = tf.placeholder(dtype=tf.float64, shape=embedding_matrix_shape)
                 self.trained_embedding = tf.get_variable(name='embedding', shape=embedding_matrix_shape, trainable=False, dtype=tf.float64)
@@ -101,7 +101,7 @@ class BiRNNWithPooling:
     def __get_masked_lm_network(self):
         """Get loss and log probs for the masked LM."""
         # RNN
-        with tf.device('/CPU:0'):
+        with tf.device('/GPU:1'):
             unk_embedding = tf.get_variable(name="unk_embedding", shape=[1, self.embedding_matrix_shape[1]], initializer=tf.zeros_initializer, trainable=False, dtype=tf.float64)
             embedding = tf.concat([self.trained_embedding, unk_embedding], axis=0)
             embed = tf.nn.embedding_lookup(embedding, self.X)
@@ -123,7 +123,8 @@ class BiRNNWithPooling:
         output_bias = tf.get_variable(name='output_bias',
             shape=[self.embedding_matrix_shape[0]],
             initializer=tf.zeros_initializer(), dtype=tf.float64)
-        logits = tf.matmul(input_tensor, self.trained_embedding, transpose_b=True) # * [vocab_size, embedding_size]
+        with tf.device('/GPU:1'):
+            logits = tf.matmul(input_tensor, self.trained_embedding, transpose_b=True) # * [vocab_size, embedding_size]
         logits = tf.nn.bias_add(logits, output_bias)
 
         log_probs = tf.nn.log_softmax(logits, axis=-1)
@@ -148,7 +149,7 @@ class BiRNNWithPooling:
             shape=[2, self.num_hidden],
             initializer=tf.truncated_normal_initializer(stddev=0.02), dtype=tf.float64)
         output_bias_ns = tf.get_variable(
-            "output_bias_ns", shape=[2], initializer=tf.zeros_initializer(), dtype=tf.float64)
+                "output_bias_ns", shape=[2], initializer=tf.zeros_initializer(), dtype=tf.float64)
 
         logits = tf.matmul(rnn_output_pooled, output_weights_ns, transpose_b=True)
         logits = tf.nn.bias_add(logits, output_bias_ns)
