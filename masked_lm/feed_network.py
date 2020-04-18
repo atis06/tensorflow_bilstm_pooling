@@ -99,7 +99,7 @@ def get_tokens():
         in_file = open(in_file_name)
         try:
             try:
-                whole_file_content = in_file.read().strip()
+                whole_file_content = in_file.read().strip().replace('õ', 'ő').replace('û', 'ű')
                 doc_tokens = word_tokenize(whole_file_content)
 
                 doc_tokens = [doc_tokens[i * max_sentence_length:(i + 1) * max_sentence_length] for i in range((len(doc_tokens) + max_sentence_length - 1) // max_sentence_length )]
@@ -116,7 +116,7 @@ def get_tokens():
             in_file.close()
 
 
-def chunks(iterable, rnd=True):
+def chunks(iterable, rnd=False):
     iterator = iter(iterable)
     for first in iterator:
         if rnd:
@@ -200,14 +200,14 @@ def get_random_sentence(except_file):
     in_file = open(in_file_name)
     try:
         try:
-            whole_file_content = in_file.read().strip()
+            whole_file_content = in_file.read().strip().replace('õ', 'ő').replace('û', 'ű')
             doc_tokens = word_tokenize(whole_file_content)
 
             while (len(doc_tokens) < max_sentence_length):
                 file = onlyfiles[random.randint(0, len(onlyfiles) - 1)]
                 in_file_name = join(text_path, file)
                 in_file = open(in_file_name)
-                whole_file_content = in_file.read().strip()
+                whole_file_content = in_file.read().strip().replace('õ', 'ő').replace('û', 'ű')
                 doc_tokens = word_tokenize(whole_file_content)
 
             doc_tokens = [doc_tokens[i * max_sentence_length:(i + 1) * max_sentence_length] for i in range((len(doc_tokens) + max_sentence_length - 1) // max_sentence_length )]
