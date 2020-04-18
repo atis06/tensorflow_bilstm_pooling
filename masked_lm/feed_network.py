@@ -9,6 +9,10 @@ import os
 import sys
 import math
 import os
+
+import functools
+print = functools.partial(print, flush=True)
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
 
 #nltk.download('punkt')
@@ -36,7 +40,7 @@ else:
 # Config
 save_model_to = './model/mlm_model.ckpt'
 
-w2v_model = Word2Vec.load('/srv/project/encoder/model/w2v/enc-hu-oscar_sm-hun_spacy/enc-hu-oscar_sm-hun_spacy.w2v')
+w2v_model = Word2Vec.load('/srv/project/encoder/model/w2v/enc-hu-oscar_sm-hun-spacy/enc-hu-oscar_sm-hun-spacy.w2v')
 w2v_dim = 300
 
 tokens_path = '../../repo/hungarian_spacy/'
@@ -362,13 +366,13 @@ with tf.Session(config = config) as sess:
 
         for i, data in enumerate(chunks(data_gen)):
             batches_num = i + 1
-            print(batches_num)
+            # print(batches_num)
             data = np.asarray(data).reshape(-1, 6)
             tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids, sentence_labels = extract_data(data)
 
-            '''print(tokens)
+            print(tokens)
             print(input_ids)
-            print(masked_lm_positions)
+            '''print(masked_lm_positions)
             print(masked_lm_weights)
             print(masked_lm_ids)
             print(sentence_labels)
