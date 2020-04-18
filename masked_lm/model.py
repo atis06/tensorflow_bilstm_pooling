@@ -24,7 +24,7 @@ class BiRNNWithPooling:
 
         self.embedding_matrix_shape = embedding_matrix_shape
 
-        with tf.device('/GPU:1'):
+        with tf.device('/CPU:0'):
             if self.use_embedding_layer:
                 self.saved_embeddings = tf.placeholder(dtype=tf.float64, shape=embedding_matrix_shape)
                 self.trained_embedding = tf.get_variable(name='embedding', shape=embedding_matrix_shape, trainable=False, dtype=tf.float64)
@@ -101,7 +101,7 @@ class BiRNNWithPooling:
     def __get_masked_lm_network(self):
         """Get loss and log probs for the masked LM."""
         # RNN
-        with tf.device('/GPU:1'):
+        with tf.device('/CPU:0'):
             unk_embedding = tf.get_variable(name="unk_embedding", shape=[1, self.embedding_matrix_shape[1]], initializer=tf.zeros_initializer, trainable=False, dtype=tf.float64)
             embedding = tf.concat([self.trained_embedding, unk_embedding], axis=0)
             embed = tf.nn.embedding_lookup(embedding, self.X)
