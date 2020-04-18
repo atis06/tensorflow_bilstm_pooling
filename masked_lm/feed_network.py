@@ -36,7 +36,7 @@ else:
 # Config
 save_model_to = './model/mlm_model.ckpt'
 
-w2v_model = Word2Vec.load('/srv/project/encoder/model/w2v/enc-hu-wiki-hun_spacy/enc-hu-wiki-hun_spacy.w2v')
+w2v_model = Word2Vec.load('/srv/project/encoder/model/w2v/enc-hu-oscar_sm-hun_spacy/enc-hu-oscar_sm-hun_spacy.w2v')
 w2v_dim = 300
 
 tokens_path = '../../repo/hungarian_spacy/'
