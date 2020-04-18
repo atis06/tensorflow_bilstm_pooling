@@ -259,10 +259,10 @@ def preprocess_data_gen():
                 sys.exit(1)
 
 
-        input_ids = [w2v_model.wv.vocab.get(token).index if w2v_model.wv.vocab.get(token) is not None else w2v_vocab_len
-                     for token in sentence]
 
         ret_output_tokens, ret_masked_lm_positions, ret_masked_lm_labels = mask(sentence)
+        input_ids = [w2v_model.wv.vocab.get(token).index if w2v_model.wv.vocab.get(token) is not None else w2v_vocab_len
+                     for token in ret_output_tokens]
         masked_lm_weights_full_sentence = np.asarray([1. if token != "[PAD]" else 0. for token in sentence])
         masked_lm_weights_gathered = masked_lm_weights_full_sentence.take(ret_masked_lm_positions)
         masked_lm_ids = np.asarray(
