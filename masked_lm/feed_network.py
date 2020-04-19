@@ -46,9 +46,9 @@ w2v_dim = 300
 tokens_path = '../../repo/hungarian_spacy/'
 
 batch_size = 12
-min_sentence_length = 3
+min_sentence_length = 10
 
-max_sentence_length = 10
+max_sentence_length = 100
 
 # masking prediction for all data
 masked_lm_prob = 0.15
@@ -59,12 +59,12 @@ max_predictions_per_seq = math.ceil((max_sentence_length * masked_lm_prob) * 2) 
 num_inputs = 1
 
 num_hidden = 1024
-learning_rate = 0.01
-dropout_keep_prob = 0.8
+learning_rate = 0.05
+dropout_keep_prob = 0.5
 pooling = 'max'
 use_embedding_layer = True
 
-epochs = 50
+epochs = 5
 
 random_seed = 733459
 mask_padding = True
@@ -264,7 +264,6 @@ def preprocess_data_gen():
                 sys.exit(1)
 
 
-
         ret_output_tokens, ret_masked_lm_positions, ret_masked_lm_labels = mask(sentence)
         input_ids = []
         for token in ret_output_tokens:
@@ -355,6 +354,65 @@ def extract_data(data):
         masked_lm_weights), np.asarray(masked_lm_ids), np.asarray(sentence_labels)
 
 
+def preprocess_data():
+    data_gen = preprocess_data_gen()
+
+    tokens_file = open("./data/tokens", "ab")
+    input_ids_file = open("./data/input_ids", "ab")
+    masked_lm_positions_file = open("./data/masked_lm_positions", "ab")
+    masked_lm_weights_file = open("./data/masked_lm_weights", "ab")
+    masked_lm_ids_file = open("./data/masked_lm_ids", "ab")
+    sentence_labels_file = open("./data/sentence_labels", "ab")
+
+    for data in data_gen:
+        data = np.asarray(data).reshape(-1, 6)
+        tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids, sentence_labels = extract_data(data)
+
+        np.savetxt(tokens_file, tokens, fmt='%s', encoding='utf8')
+        #tokens_file.write(b"\n")
+
+        np.savetxt(input_ids_file, input_ids, fmt='%u', encoding='utf8')
+        #input_ids_file.write(b"\n")
+
+        np.savetxt(masked_lm_positions_file, masked_lm_positions, fmt='%u', encoding='utf8')
+        #masked_lm_positions_file.write(b"\n")
+
+        np.savetxt(masked_lm_weights_file, masked_lm_weights, fmt='%u', encoding='utf8')
+        #masked_lm_weights_file.write(b"\n")
+
+        np.savetxt(masked_lm_ids_file, masked_lm_ids, fmt='%u', encoding='utf8')
+        #masked_lm_ids_file.write(b"\n")
+
+        np.savetxt(sentence_labels_file, sentence_labels, fmt='%u', encoding='utf8')
+        #sentence_labels_file.write(b"\n")
+
+    tokens_file.close()
+    input_ids_file.close()
+    masked_lm_positions_file.close()
+    masked_lm_weights_file.close()
+    masked_lm_ids_file.close()
+    sentence_labels_file.close()
+
+
+def load_data():
+    tokens_file = open("./data/tokens", "r")
+    input_ids_file = open("./data/input_ids", "r")
+    masked_lm_positions_file = open("./data/masked_lm_positions", "r")
+    masked_lm_weights_file = open("./data/masked_lm_weights", "r")
+    masked_lm_ids_file = open("./data/masked_lm_ids", "r")
+    sentence_labels_file = open("./data/sentence_labels", "r")
+
+    for tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids, is_next_sentence in zip(tokens_file, input_ids_file, masked_lm_positions_file, masked_lm_weights_file, masked_lm_ids_file, sentence_labels_file):
+        yield np.asarray(tokens.split()), np.asarray(input_ids.split()).astype(int), np.asarray(masked_lm_positions.split()).astype(int), np.asarray(
+            masked_lm_weights.split()).astype(float), np.asarray(masked_lm_ids.split()).astype(int), int(is_next_sentence.rstrip('\n'))
+
+if not os.listdir('./data'):
+    print('Preprocess data...')
+    preprocess_data()
+    print('Preprocess done.')
+else:
+    print('Preprocessed data found.')
+
 model = BiRNNWithPooling(num_inputs, num_time_steps, num_hidden, learning_rate, dropout_keep_prob, pooling,
                          use_embedding_layer, embedding_matrix.shape)
 
@@ -378,7 +436,7 @@ with tf.Session(config = config) as sess:
         all_ns = 0
         print('Epoch: ' + str(epoch + 1))
         random.seed(random_seed)
-        data_gen = preprocess_data_gen()
+        data_gen = load_data()
 
         for i, data in enumerate(chunks(data_gen)):
             batches_num = i + 1
@@ -386,9 +444,9 @@ with tf.Session(config = config) as sess:
             data = np.asarray(data).reshape(-1, 6)
             tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids, sentence_labels = extract_data(data)
 
-            print(tokens)
+            '''print(tokens)
             print(input_ids)
-            '''print(masked_lm_positions)
+            print(masked_lm_positions)
             print(masked_lm_weights)
             print(masked_lm_ids)
             print(sentence_labels)
