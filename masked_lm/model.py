@@ -14,7 +14,7 @@ class BiRNNWithPooling:
         # Hidden neurons in each rnn layer
         self.num_hidden = num_hidden
         # Learning rate you can play with this
-        self.learning_rate = learning_rate
+        self.learning_rate = tf.Variable(learning_rate)
         # Dropout keep probability (can be None)
         self.dropout_keep_prob = dropout_keep_prob
         # Pooling (max, avg, None)

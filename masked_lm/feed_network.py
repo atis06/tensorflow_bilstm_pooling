@@ -35,8 +35,11 @@ else:
 # Config
 save_model_to = './model/mlm_model.ckpt'
 
+print('Load embedding model...')
 w2v_model = Word2Vec.load('/srv/project/encoder/model/w2v/enc-hu-oscar_sm-hun-spacy/enc-hu-oscar_sm-hun-spacy.w2v')
 w2v_dim = 300
+
+print('Embedding model loaded.')
 
 tokens_path = '../../repo/hungarian_spacy/'
 
@@ -54,7 +57,9 @@ max_predictions_per_seq = math.ceil((max_sentence_length * masked_lm_prob) * 2) 
 num_inputs = 1
 
 num_hidden = 1024
-learning_rate = 0.001
+learning_rate_start = 0.1
+lr_decay = False
+lr_decay_threshold = 0
 dropout_keep_prob = 1
 pooling = 'max'
 use_embedding_layer = True
@@ -418,8 +423,12 @@ init = tf.global_variables_initializer()
 saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, "birnn"))
 
 with tf.Session() as sess:
+    prev_epoch_loss = 0
     sess.run(init)
-    #saver.restore(sess, 'model/mlm-model.ckpt')
+    if os.path.isfile('./model/mlm-model.ckpt.index'):
+        print('Restoring weights...')
+        saver.restore(sess, 'model/mlm-model.ckpt')
+        print('Weights restored...')
     sess.run(model.trained_embedding.assign(model.saved_embeddings), {model.saved_embeddings: embedding_matrix})
     for epoch in range(epochs):
         batches_num = 1
@@ -498,6 +507,12 @@ with tf.Session() as sess:
         print('Next_sentence loss: ' + str(next_sentence))
         print('MLM accuracy: ' + str(mlm_acc))
         print('Next sentence accuracy: ' + str(ns_acc))
+
+        if lr_decay and epoch > 0 and (prev_epoch_loss - lr_decay_threshold) < epoch_loss:
+            learning_rate_start = float(learning_rate_start / 5.)
+            sess.run(model.learning_rate.assign(learning_rate_start))
+            print('Learning rate divided by 5, new lr is: ' + str(learning_rate_start))
+        prev_epoch_loss = epoch_loss
 
         print('------------------------------------------------------------')
 
