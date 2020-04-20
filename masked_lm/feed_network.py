@@ -24,11 +24,6 @@ from model import BiRNNWithPooling
 from tensorflow.python.client import device_lib
 tf.compat.v1.disable_eager_execution()
 
-config = tf.ConfigProto(
-        device_count = {'GPU': 2}
-    )
-
-
 os.environ['CUDA_VISIBLE_DEVICES'] = '0, 1'
 
 
@@ -59,8 +54,8 @@ max_predictions_per_seq = math.ceil((max_sentence_length * masked_lm_prob) * 2) 
 num_inputs = 1
 
 num_hidden = 1024
-learning_rate = 0.05
-dropout_keep_prob = 0.5
+learning_rate = 0.001
+dropout_keep_prob = 1
 pooling = 'max'
 use_embedding_layer = True
 
@@ -220,6 +215,8 @@ def get_random_sentence(except_file):
                 doc_tokens = word_tokenize(whole_file_content)
 
             doc_tokens = [doc_tokens[i * max_sentence_length:(i + 1) * max_sentence_length] for i in range((len(doc_tokens) + max_sentence_length - 1) // max_sentence_length )]
+
+            doc_tokens = [tokens for tokens in doc_tokens if min_sentence_length <= len(tokens)]
 
             returned_sentence = doc_tokens[random.randint(0, len(doc_tokens)-1)]
             return returned_sentence + ['[PAD]' for i in range(max_sentence_length - len(returned_sentence))]
@@ -420,10 +417,9 @@ init = tf.global_variables_initializer()
 
 saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, "birnn"))
 
-
-with tf.Session(config = config) as sess:
+with tf.Session() as sess:
     sess.run(init)
-    # saver.restore(sess, 'model/mlm-model.ckpt')
+    #saver.restore(sess, 'model/mlm-model.ckpt')
     sess.run(model.trained_embedding.assign(model.saved_embeddings), {model.saved_embeddings: embedding_matrix})
     for epoch in range(epochs):
         batches_num = 1
