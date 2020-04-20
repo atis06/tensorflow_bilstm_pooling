@@ -33,7 +33,7 @@ class TrainingInstance(object):
 
 def layer_norm(input_tensor, name = None):
   """Run layer normalization on the last dimension of the tensor."""
-  return tf.keras.layers.LayerNormalization(name=name,axis=-1,epsilon=1e-12,dtype=tf.float64)(input_tensor)
+  return tf.keras.layers.LayerNormalization(name=name,axis=-1,epsilon=1e-12,dtype=tf.float32)(input_tensor)
 
 def get_shape_list(tensor, name=None):
   """Returns a list of the shape of tensor, preferring static dimensions.

@@ -26,8 +26,8 @@ class BiRNNWithPooling:
 
         with tf.device('/GPU:1'):
             if self.use_embedding_layer:
-                self.saved_embeddings = tf.placeholder(dtype=tf.float64, shape=embedding_matrix_shape)
-                self.trained_embedding = tf.get_variable(name='embedding', shape=embedding_matrix_shape, trainable=False, dtype=tf.float64)
+                self.saved_embeddings = tf.placeholder(dtype=tf.float32, shape=embedding_matrix_shape)
+                self.trained_embedding = tf.get_variable(name='embedding', shape=embedding_matrix_shape, trainable=False, dtype=tf.float32)
                 
         self.X = tf.placeholder(tf.int32, [None, self.num_time_steps])
 
@@ -40,12 +40,12 @@ class BiRNNWithPooling:
     def __init_placeholders_masked_lm(self):
         positions = tf.placeholder(tf.int32)
         label_ids = tf.placeholder(tf.int32)
-        label_weights = tf.placeholder(tf.float64)
+        label_weights = tf.placeholder(tf.float32)
 
         return positions, label_ids, label_weights
 
     def __init_placeholders_next_sentence(self):
-        sentence_labels = tf.placeholder(tf.int32)
+        sentence_labels = tf.placeholder(tf.uint8)
 
         return sentence_labels
 
@@ -60,7 +60,7 @@ class BiRNNWithPooling:
                     bw_cell=tf.nn.rnn_cell.DropoutWrapper(bw_cell,output_keep_prob=self.dropout_keep_prob)
 
             outputs, _ = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, input,
-                                                             dtype=tf.float64)
+                                                             dtype=tf.float32)
 
             output_rnn = tf.concat(outputs, axis=2)  # [batch_size,sequence_length,hidden_size]
 
@@ -114,13 +114,11 @@ class BiRNNWithPooling:
 
         input_tensor = utils.layer_norm(input_tensor)
 
-        input_tensor = tf.cast(input_tensor, tf.float64)
-
         # The output weights are the same as the input embeddings, but there is
         # an output-only bias for each token.
         output_bias = tf.get_variable(name='output_bias',
             shape=[self.embedding_matrix_shape[0]],
-            initializer=tf.zeros_initializer(), dtype=tf.float64)
+            initializer=tf.zeros_initializer(), dtype=tf.float32)
         with tf.device('/GPU:1'):
             logits = tf.matmul(input_tensor, self.trained_embedding, transpose_b=True) # * [vocab_size, embedding_size]
         logits = tf.nn.bias_add(logits, output_bias)
@@ -133,7 +131,7 @@ class BiRNNWithPooling:
         label_weights = tf.reshape(self.label_weights, [-1])
 
         one_hot_labels = tf.one_hot(
-            label_ids, depth=self.embedding_matrix_shape[0], dtype=tf.float64)
+            label_ids, depth=self.embedding_matrix_shape[0], dtype=tf.float32)
 
         per_example_loss = -tf.reduce_sum(log_probs * one_hot_labels, axis=[-1])
         numerator = tf.reduce_sum(label_weights * per_example_loss)
@@ -145,9 +143,9 @@ class BiRNNWithPooling:
         output_weights_ns = tf.get_variable(
             "output_weights_ns",
             shape=[2, self.num_hidden],
-            initializer=tf.truncated_normal_initializer(stddev=0.02), dtype=tf.float64)
+            initializer=tf.truncated_normal_initializer(stddev=0.02), dtype=tf.float32)
         output_bias_ns = tf.get_variable(
-                "output_bias_ns", shape=[2], initializer=tf.zeros_initializer(), dtype=tf.float64)
+                "output_bias_ns", shape=[2], initializer=tf.zeros_initializer(), dtype=tf.float32)
 
         logits = tf.matmul(rnn_output_pooled, output_weights_ns, transpose_b=True)
         logits = tf.nn.bias_add(logits, output_bias_ns)
@@ -156,7 +154,7 @@ class BiRNNWithPooling:
         log_probs_ns = tf.exp(log_probs)
 
         labels = tf.reshape(self.sentence_labels, [-1])
-        one_hot_labels = tf.one_hot(labels, depth=2, dtype=tf.float64)
+        one_hot_labels = tf.one_hot(labels, depth=2, dtype=tf.float32)
         per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
         loss_next_sentence = tf.reduce_mean(per_example_loss)
 

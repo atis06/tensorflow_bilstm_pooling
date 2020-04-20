@@ -43,7 +43,7 @@ print('Embedding model loaded.')
 
 tokens_path = '../../repo/hungarian_spacy/'
 
-batch_size = 12
+batch_size = 20
 min_sentence_length = 10
 
 max_sentence_length = 100
@@ -58,7 +58,7 @@ num_inputs = 1
 
 num_hidden = 1024
 learning_rate_start = 0.1
-lr_decay = False
+lr_decay = True
 lr_decay_threshold = 0
 dropout_keep_prob = 1
 pooling = 'max'
@@ -445,7 +445,8 @@ with tf.Session() as sess:
 
         for i, data in enumerate(chunks(data_gen)):
             batches_num = i + 1
-            # print(batches_num)
+            #if batches_num % 100 == 0:
+            print(batches_num)
             data = np.asarray(data).reshape(-1, 6)
             tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids, sentence_labels = extract_data(data)
 
