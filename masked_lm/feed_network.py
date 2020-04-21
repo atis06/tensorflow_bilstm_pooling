@@ -43,7 +43,7 @@ print('Embedding model loaded.')
 
 tokens_path = '../../repo/hungarian_spacy/'
 
-batch_size = 20
+batch_size = 32
 min_sentence_length = 10
 
 max_sentence_length = 100
@@ -60,7 +60,7 @@ num_hidden = 1024
 learning_rate_start = 0.1
 lr_decay = True
 lr_decay_threshold = 0
-dropout_keep_prob = 1
+dropout_keep_prob = 0.5
 pooling = 'max'
 use_embedding_layer = True
 
@@ -108,7 +108,7 @@ def get_tokens():
         in_file = open(in_file_name)
         try:
             try:
-                whole_file_content = in_file.read().strip().replace('õ', 'ő').replace('û', 'ű')
+                whole_file_content = in_file.read().strip().replace('õ', 'ő').replace('û', 'ű').replace('ô', 'ő')
                 doc_tokens = word_tokenize(whole_file_content)
 
                 doc_tokens = [doc_tokens[i * max_sentence_length:(i + 1) * max_sentence_length] for i in range((len(doc_tokens) + max_sentence_length - 1) // max_sentence_length )]
@@ -209,14 +209,14 @@ def get_random_sentence(except_file):
     in_file = open(in_file_name)
     try:
         try:
-            whole_file_content = in_file.read().strip().replace('õ', 'ő').replace('û', 'ű')
+            whole_file_content = in_file.read().strip().replace('õ', 'ő').replace('û', 'ű').replace('ô', 'ő')
             doc_tokens = word_tokenize(whole_file_content)
 
             while (len(doc_tokens) < max_sentence_length):
                 file = onlyfiles[random.randint(0, len(onlyfiles) - 1)]
                 in_file_name = join(text_path, file)
                 in_file = open(in_file_name)
-                whole_file_content = in_file.read().strip().replace('õ', 'ő').replace('û', 'ű')
+                whole_file_content = in_file.read().strip().replace('õ', 'ő').replace('û', 'ű').replace('ô', 'ő')
                 doc_tokens = word_tokenize(whole_file_content)
 
             doc_tokens = [doc_tokens[i * max_sentence_length:(i + 1) * max_sentence_length] for i in range((len(doc_tokens) + max_sentence_length - 1) // max_sentence_length )]
@@ -445,8 +445,8 @@ with tf.Session() as sess:
 
         for i, data in enumerate(chunks(data_gen)):
             batches_num = i + 1
-            #if batches_num % 100 == 0:
-            print(batches_num)
+            '''if batches_num % 1000 == 0:
+                print(batches_num)'''
             data = np.asarray(data).reshape(-1, 6)
             tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids, sentence_labels = extract_data(data)
 
@@ -457,9 +457,7 @@ with tf.Session() as sess:
             print(masked_lm_ids)
             print(sentence_labels)
             print('###')'''
-
-            feed_dict = {model.X: input_ids, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids,
-                         model.label_weights: masked_lm_weights, model.sentence_labels: sentence_labels}
+            feed_dict = {model.X: input_ids, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids, model.label_weights: masked_lm_weights, model.sentence_labels: sentence_labels}
             model.train_masked_lm(sess, feed_dict)
 
             out = sess.run(model.out, feed_dict)

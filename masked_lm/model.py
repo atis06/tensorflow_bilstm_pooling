@@ -121,44 +121,43 @@ class BiRNNWithPooling:
             initializer=tf.zeros_initializer(), dtype=tf.float32)
         with tf.device('/GPU:1'):
             logits = tf.matmul(input_tensor, self.trained_embedding, transpose_b=True) # * [vocab_size, embedding_size]
-        logits = tf.nn.bias_add(logits, output_bias)
+            logits = tf.nn.bias_add(logits, output_bias)
 
-        log_probs = tf.nn.log_softmax(logits, axis=-1)
+            log_probs = tf.nn.log_softmax(logits, axis=-1)
 
         log_probs_mlm = tf.exp(log_probs)
 
         label_ids = tf.reshape(self.label_ids, [-1])
         label_weights = tf.reshape(self.label_weights, [-1])
+        one_hot_labels = tf.one_hot(label_ids, depth=self.embedding_matrix_shape[0], dtype=tf.float32)
 
-        one_hot_labels = tf.one_hot(
-            label_ids, depth=self.embedding_matrix_shape[0], dtype=tf.float32)
-
-        per_example_loss = -tf.reduce_sum(log_probs * one_hot_labels, axis=[-1])
-        numerator = tf.reduce_sum(label_weights * per_example_loss)
-        denominator = tf.reduce_sum(label_weights) + 1e-5
-        loss_mlm = numerator / denominator
+        with tf.device('/GPU:1'):
+            per_example_loss = -tf.reduce_sum(log_probs * one_hot_labels, axis=[-1])
+            numerator = tf.reduce_sum(label_weights * per_example_loss)
+            denominator = tf.reduce_sum(label_weights) + 1e-5
+            loss_mlm = numerator / denominator
 
 
         # NEXT SENTENCE
-        output_weights_ns = tf.get_variable(
-            "output_weights_ns",
-            shape=[2, self.num_hidden],
-            initializer=tf.truncated_normal_initializer(stddev=0.02), dtype=tf.float32)
-        output_bias_ns = tf.get_variable(
-                "output_bias_ns", shape=[2], initializer=tf.zeros_initializer(), dtype=tf.float32)
+            output_weights_ns = tf.get_variable(
+                "output_weights_ns",
+                shape=[2, self.num_hidden],
+                initializer=tf.truncated_normal_initializer(stddev=0.02), dtype=tf.float32)
+            output_bias_ns = tf.get_variable(
+                    "output_bias_ns", shape=[2], initializer=tf.zeros_initializer(), dtype=tf.float32)
 
-        logits = tf.matmul(rnn_output_pooled, output_weights_ns, transpose_b=True)
-        logits = tf.nn.bias_add(logits, output_bias_ns)
-        log_probs = tf.nn.log_softmax(logits, axis=-1)
+            logits = tf.matmul(rnn_output_pooled, output_weights_ns, transpose_b=True)
+            logits = tf.nn.bias_add(logits, output_bias_ns)
+            log_probs = tf.nn.log_softmax(logits, axis=-1)
 
-        log_probs_ns = tf.exp(log_probs)
+            log_probs_ns = tf.exp(log_probs)
 
-        labels = tf.reshape(self.sentence_labels, [-1])
-        one_hot_labels = tf.one_hot(labels, depth=2, dtype=tf.float32)
-        per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
-        loss_next_sentence = tf.reduce_mean(per_example_loss)
+            labels = tf.reshape(self.sentence_labels, [-1])
+            one_hot_labels = tf.one_hot(labels, depth=2, dtype=tf.float32)
+            per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
+            loss_next_sentence = tf.reduce_mean(per_example_loss)
 
-        loss = loss_mlm + loss_next_sentence
+            loss = loss_mlm + loss_next_sentence
 
         optimizer = self.__optimizer(loss)
 
