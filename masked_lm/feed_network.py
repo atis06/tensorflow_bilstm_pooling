@@ -75,6 +75,13 @@ random.seed(random_seed)
 num_time_steps = 2 * max_sentence_length + 1
 w2v_vocab_len = len(w2v_model.wv.vocab)
 
+path = '.'
+text_path = join(path, tokens_path)
+
+all_file = [f for f in listdir(text_path) if isfile(join(text_path, f))]
+all_file_len = len(all_file)
+vocab_length = len(w2v_model.wv.vocab)
+
 def get_embedding_matrix(w2v_model):
     embedding_matrix = np.zeros((len(w2v_model.wv.vocab) + 4, w2v_dim + 4))
     for i in range(len(w2v_model.wv.vocab)):
@@ -82,10 +89,10 @@ def get_embedding_matrix(w2v_model):
         if embedding_vector is not None:
             embedding_matrix[i] = embedding_vector
 
-    embedding_matrix[len(w2v_model.wv.vocab)] = np.append(np.zeros(w2v_dim), [1, 0, 0, 0]) # [PAD]
-    embedding_matrix[len(w2v_model.wv.vocab) + 1] = np.append(np.zeros(w2v_dim), [0, 1, 0, 0]) # [MASK]
-    embedding_matrix[len(w2v_model.wv.vocab) + 2] = np.append(np.zeros(w2v_dim), [0, 0, 1, 0]) # [SEP]
-    embedding_matrix[len(w2v_model.wv.vocab) + 3] = np.append(np.zeros(w2v_dim), [0, 0, 0, 1]) # unknown
+    embedding_matrix[vocab_length] = np.append(np.zeros(w2v_dim), [1, 0, 0, 0]) # [PAD]
+    embedding_matrix[vocab_length + 1] = np.append(np.zeros(w2v_dim), [0, 1, 0, 0]) # [MASK]
+    embedding_matrix[vocab_length + 2] = np.append(np.zeros(w2v_dim), [0, 0, 1, 0]) # [SEP]
+    embedding_matrix[vocab_length + 3] = np.append(np.zeros(w2v_dim), [0, 0, 0, 1]) # unknown
 
     return embedding_matrix
 
@@ -99,16 +106,14 @@ def pairwise(iterable):
 
 
 def get_tokens():
-    path = '.'
-    text_path = join(path, tokens_path)
-
-    onlyfiles = [f for f in listdir(text_path) if isfile(join(text_path, f))]
+    onlyfiles = all_file.copy()
+    assert len(onlyfiles) == all_file_len
     for file in onlyfiles:
         in_file_name = join(text_path, file)
         in_file = open(in_file_name)
         try:
             try:
-                whole_file_content = in_file.read().strip().replace('õ', 'ő').replace('û', 'ű').replace('ô', 'ő')
+                whole_file_content = in_file.read().strip().replace('õ', 'ő').replace('û', 'ű').replace('ô', 'ő').replace('rdquo', '').replace('bdquo', '')
                 doc_tokens = word_tokenize(whole_file_content)
 
                 doc_tokens = [doc_tokens[i * max_sentence_length:(i + 1) * max_sentence_length] for i in range((len(doc_tokens) + max_sentence_length - 1) // max_sentence_length )]
@@ -181,7 +186,7 @@ def mask(tokens):
                     masked_token = tokens[index]
                 # 10% of the time, replace with random word
                 else:
-                    masked_token = w2v_model.wv.index2word[random.randint(0, len(w2v_model.wv.vocab) - 1)]
+                    masked_token = w2v_model.wv.index2word[random.randint(0, vocab_length - 1)]
 
             output_tokens[index] = masked_token
 
@@ -199,25 +204,25 @@ def mask(tokens):
 
 
 def get_random_sentence(except_file):
-    path = '.'
-    text_path = join(path, tokens_path)
-
-    onlyfiles = [f for f in listdir(text_path) if isfile(join(text_path, f))]
+    onlyfiles = all_file.copy()
+    assert len(onlyfiles) == all_file_len
     onlyfiles.remove(except_file) # Can't open the data itself
     file = onlyfiles[random.randint(0, len(onlyfiles) - 1)]
     in_file_name = join(text_path, file)
     in_file = open(in_file_name)
     try:
         try:
-            whole_file_content = in_file.read().strip().replace('õ', 'ő').replace('û', 'ű').replace('ô', 'ő')
+            whole_file_content = in_file.read().strip().replace('õ', 'ő').replace('û', 'ű').replace('ô', 'ő').replace('rdquo', '').replace('bdquo', '')
             doc_tokens = word_tokenize(whole_file_content)
 
             while (len(doc_tokens) < max_sentence_length):
+                onlyfiles.remove(file)
                 file = onlyfiles[random.randint(0, len(onlyfiles) - 1)]
                 in_file_name = join(text_path, file)
                 in_file = open(in_file_name)
-                whole_file_content = in_file.read().strip().replace('õ', 'ő').replace('û', 'ű').replace('ô', 'ő')
+                whole_file_content = in_file.read().strip().replace('õ', 'ő').replace('û', 'ű').replace('ô', 'ő').replace('rdquo', '').replace('bdquo', '')
                 doc_tokens = word_tokenize(whole_file_content)
+
 
             doc_tokens = [doc_tokens[i * max_sentence_length:(i + 1) * max_sentence_length] for i in range((len(doc_tokens) + max_sentence_length - 1) // max_sentence_length )]
 
@@ -272,13 +277,13 @@ def preprocess_data_gen():
             if w2v_model.wv.vocab.get(token) is not None:
                 input_ids.append(w2v_model.wv.vocab.get(token).index)
             elif token == '[PAD]':
-                input_ids.append(len(w2v_model.wv.vocab))
+                input_ids.append(vocab_length)
             elif token == '[MASK]':
-                input_ids.append(len(w2v_model.wv.vocab) + 1)
+                input_ids.append(vocab_length + 1)
             elif token == '[SEP]':
-                input_ids.append(len(w2v_model.wv.vocab) + 2)
+                input_ids.append(vocab_length + 2)
             else:
-                input_ids.append(len(w2v_model.wv.vocab) + 3)
+                input_ids.append(vocab_length + 3)
 
         masked_lm_weights_full_sentence = np.asarray([1. if token != "[PAD]" else 0. for token in sentence])
         masked_lm_weights_gathered = masked_lm_weights_full_sentence.take(ret_masked_lm_positions)
@@ -288,52 +293,6 @@ def preprocess_data_gen():
 
         yield np.asarray(ret_output_tokens), np.asarray(input_ids), np.asarray(ret_masked_lm_positions), np.asarray(
             masked_lm_weights_gathered), np.asarray(masked_lm_ids), is_next_sentence
-
-
-'''def preprocess_data():
-    output_tokens = []
-    input_ids = []
-    masked_lm_positions = []
-    masked_lm_weights = []
-    masked_lm_ids = []
-
-    for chunk in chunks(get_tokens()):
-        chunk_tokens = []
-        chunk_input_ids = []
-        chunk_masked_lm_positions = []
-        chunk_masked_lm_weights = []
-        chunk_masked_lm_ids = []
-        for sentence in chunk:
-            if len(sentence) < max_sentence_length:
-                tokens = sentence + ['[PAD]' for i in range(max_sentence_length - len(sentence))]
-            else:
-                tokens = sentence[0:max_sentence_length]
-
-            w2v_vocab_len = len(w2v_model.wv.vocab)
-            chunk_input_ids.append(
-                [w2v_model.wv.vocab.get(token).index if w2v_model.wv.vocab.get(token) is not None else w2v_vocab_len for
-                 token in tokens])
-
-            ret_output_tokens, ret_masked_lm_positions, ret_masked_lm_labels = mask(tokens)
-            chunk_masked_lm_positions.append(ret_masked_lm_positions)
-            chunk_tokens.append(ret_output_tokens)
-            masked_lm_weights_full_sentence = np.asarray(
-                [1.] * len(sentence) + [0.] * (max_sentence_length - len(sentence)))
-            masked_lm_weights_gathered = masked_lm_weights_full_sentence.take(ret_masked_lm_positions)
-            chunk_masked_lm_weights.append(masked_lm_weights_gathered)
-            chunk_masked_lm_ids.append(np.asarray(
-                [w2v_model.wv.vocab.get(label).index if w2v_model.wv.vocab.get(label) is not None else w2v_vocab_len for
-                 label in ret_masked_lm_labels]))
-
-        output_tokens.append(np.asarray(chunk_tokens))
-        input_ids.append(np.asarray(chunk_input_ids))
-        masked_lm_positions.append(np.asarray(chunk_masked_lm_positions))
-        masked_lm_weights.append(np.asarray(chunk_masked_lm_weights))
-        masked_lm_ids.append(np.asarray(chunk_masked_lm_ids))
-
-        yield np.asarray(output_tokens), np.asarray(input_ids), np.asarray(masked_lm_positions), np.asarray(
-            masked_lm_weights), np.asarray(masked_lm_ids)
-        # return output_tokens, np.asarray(input_ids), masked_lm_positions, masked_lm_weights, masked_lm_ids'''
 
 
 def extract_data(data):
