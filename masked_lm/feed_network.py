@@ -73,7 +73,6 @@ mask_padding = True
 random.seed(random_seed)
 
 num_time_steps = 2 * max_sentence_length + 1
-w2v_vocab_len = len(w2v_model.wv.vocab)
 
 path = '.'
 text_path = join(path, tokens_path)
@@ -288,7 +287,7 @@ def preprocess_data_gen():
         masked_lm_weights_full_sentence = np.asarray([1. if token != "[PAD]" else 0. for token in sentence])
         masked_lm_weights_gathered = masked_lm_weights_full_sentence.take(ret_masked_lm_positions)
         masked_lm_ids = np.asarray(
-            [w2v_model.wv.vocab.get(label).index if w2v_model.wv.vocab.get(label) is not None else w2v_vocab_len for
+            [w2v_model.wv.vocab.get(label).index if w2v_model.wv.vocab.get(label) is not None else vocab_length for
              label in ret_masked_lm_labels])
 
         yield np.asarray(ret_output_tokens), np.asarray(input_ids), np.asarray(ret_masked_lm_positions), np.asarray(
