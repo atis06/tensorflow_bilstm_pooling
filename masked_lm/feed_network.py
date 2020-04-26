@@ -464,6 +464,9 @@ with tf.Session() as sess:
         print('Next_sentence loss: ' + str(next_sentence))
         print('MLM accuracy: ' + str(mlm_acc))
         print('Next sentence accuracy: ' + str(ns_acc))
+        print('Saving weights...')
+        saver.save(sess, './model/' + str(epoch + 1) + '/mlm-model-epoch' + str(epoch + 1)  +  '.ckpt')
+        print('Saved.')
 
         if lr_decay and epoch > 0 and (prev_epoch_loss - lr_decay_threshold) < epoch_loss:
             learning_rate_start = float(learning_rate_start / 5.)
@@ -473,7 +476,4 @@ with tf.Session() as sess:
 
         print('------------------------------------------------------------')
 
-    print('Saving weights...')
-    saver.save(sess, './model/mlm-model.ckpt')
-    print('Saved.')
     print('End.')
