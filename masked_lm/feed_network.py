@@ -55,7 +55,7 @@ max_predictions_per_seq = math.ceil((max_sentence_length * masked_lm_prob) * 2) 
 # network config
 num_inputs = 1
 
-num_hidden = 2048
+num_hidden = 1024
 learning_rate_start = 0.1
 lr_decay = True
 lr_decay_threshold = 0
@@ -466,8 +466,8 @@ with tf.Session() as sess:
         print('Next sentence accuracy: ' + str(ns_acc))
         print('Saving weights...')
         try:
-            saver.save(sess, './model/' + str(epoch + 2) + '/mlm-model-epoch' + str(epoch + 2)  +  '.ckpt')
-            saver_all.save(sess, './model/mlm/' + str(epoch + 2) + '/mlm-model-epoch' + str(epoch + 2)  +  '.ckpt')
+            saver.save(sess, './model/' + str(epoch + 1) + '/mlm-model-epoch' + str(epoch + 1)  +  '.ckpt')
+            saver_all.save(sess, './model/mlm/' + str(epoch + 1) + '/mlm-model-epoch' + str(epoch + 1)  +  '.ckpt')
         except Exception as ex:
             print(ex)
         print('Saved.')
