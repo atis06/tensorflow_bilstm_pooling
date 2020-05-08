@@ -23,7 +23,7 @@ from model import BiRNNWithPooling
 from tensorflow.python.client import device_lib
 tf.compat.v1.disable_eager_execution()
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0, 1'
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
 
 
 if tf.test.gpu_device_name():
@@ -42,7 +42,7 @@ print('Embedding model loaded.')
 
 tokens_path = '../../repo/hungarian_spacy/'
 
-batch_size = 32
+batch_size = 1
 min_sentence_length = 10
 
 max_sentence_length = 100
@@ -55,15 +55,15 @@ max_predictions_per_seq = math.ceil((max_sentence_length * masked_lm_prob) * 2) 
 # network config
 num_inputs = 1
 
-num_hidden = 2048
+num_hidden = 1024
 learning_rate_start = 0.1
 lr_decay = True
 lr_decay_threshold = 0
-dropout_keep_prob = 0.5
+dropout_keep_prob = None
 pooling = 'max'
 use_embedding_layer = True
 
-epochs = 15
+epochs = 1
 
 random_seed = 733459
 mask_padding = True
@@ -316,12 +316,12 @@ def extract_data(data):
 def preprocess_data():
     data_gen = preprocess_data_gen()
 
-    tokens_file = open("./data/tokens", "ab")
-    input_ids_file = open("./data/input_ids", "ab")
-    masked_lm_positions_file = open("./data/masked_lm_positions", "ab")
-    masked_lm_weights_file = open("./data/masked_lm_weights", "ab")
-    masked_lm_ids_file = open("./data/masked_lm_ids", "ab")
-    sentence_labels_file = open("./data/sentence_labels", "ab")
+    tokens_file = open("./data/test/tokens", "ab")
+    input_ids_file = open("./data/test/input_ids", "ab")
+    masked_lm_positions_file = open("./data/test/masked_lm_positions", "ab")
+    masked_lm_weights_file = open("./data/test/masked_lm_weights", "ab")
+    masked_lm_ids_file = open("./data/test/masked_lm_ids", "ab")
+    sentence_labels_file = open("./data/test/sentence_labels", "ab")
 
     for data in data_gen:
         data = np.asarray(data).reshape(-1, 6)
@@ -354,18 +354,18 @@ def preprocess_data():
 
 
 def load_data():
-    tokens_file = open("./data/tokens", "r")
-    input_ids_file = open("./data/input_ids", "r")
-    masked_lm_positions_file = open("./data/masked_lm_positions", "r")
-    masked_lm_weights_file = open("./data/masked_lm_weights", "r")
-    masked_lm_ids_file = open("./data/masked_lm_ids", "r")
-    sentence_labels_file = open("./data/sentence_labels", "r")
+    tokens_file = open("./data/test/tokens", "r")
+    input_ids_file = open("./data/test/input_ids", "r")
+    masked_lm_positions_file = open("./data/test/masked_lm_positions", "r")
+    masked_lm_weights_file = open("./data/test/masked_lm_weights", "r")
+    masked_lm_ids_file = open("./data/test/masked_lm_ids", "r")
+    sentence_labels_file = open("./data/test/sentence_labels", "r")
 
     for tokens, input_ids, masked_lm_positions, masked_lm_weights, masked_lm_ids, is_next_sentence in zip(tokens_file, input_ids_file, masked_lm_positions_file, masked_lm_weights_file, masked_lm_ids_file, sentence_labels_file):
         yield np.asarray(tokens.split()), np.asarray(input_ids.split()).astype(int), np.asarray(masked_lm_positions.split()).astype(int), np.asarray(
             masked_lm_weights.split()).astype(float), np.asarray(masked_lm_ids.split()).astype(int), int(is_next_sentence.rstrip('\n'))
 
-if not os.listdir('./data'):
+if not os.listdir('./data/test'):
     print('Preprocess data...')
     preprocess_data()
     print('Preprocess done.')
@@ -416,7 +416,7 @@ with tf.Session() as sess:
             print(sentence_labels)
             print('###')'''
             feed_dict = {model.X: input_ids, model.positions: masked_lm_positions, model.label_ids: masked_lm_ids, model.label_weights: masked_lm_weights, model.sentence_labels: sentence_labels}
-            model.train_masked_lm(sess, feed_dict)
+            #model.train_masked_lm(sess, feed_dict)
 
             out = sess.run(model.out, feed_dict)
 
@@ -464,19 +464,19 @@ with tf.Session() as sess:
         print('Next_sentence loss: ' + str(next_sentence))
         print('MLM accuracy: ' + str(mlm_acc))
         print('Next sentence accuracy: ' + str(ns_acc))
-        print('Saving weights...')
-        try:
-            saver.save(sess, './model/' + str(epoch + 2) + '/mlm-model-epoch' + str(epoch + 2)  +  '.ckpt')
-            saver_all.save(sess, './model/mlm/' + str(epoch + 2) + '/mlm-model-epoch' + str(epoch + 2)  +  '.ckpt')
-        except Exception as ex:
-            print(ex)
-        print('Saved.')
+        #print('Saving weights...')
+        #try:
+        #    saver.save(sess, './model/' + str(epoch + 2) + '/mlm-model-epoch' + str(epoch + 2)  +  '.ckpt')
+        #    saver_all.save(sess, './model/mlm/' + str(epoch + 2) + '/mlm-model-epoch' + str(epoch + 2)  +  '.ckpt')
+        #except Exception as ex:
+        #    print(ex)
+        #print('Saved.')
 
-        if lr_decay and epoch > 0 and (prev_epoch_loss - lr_decay_threshold) < epoch_loss:
+        '''if lr_decay and epoch > 0 and (prev_epoch_loss - lr_decay_threshold) < epoch_loss:
             learning_rate_start = float(learning_rate_start / 5.)
             sess.run(model.learning_rate.assign(learning_rate_start))
             print('Learning rate divided by 5, new lr is: ' + str(learning_rate_start))
-        prev_epoch_loss = epoch_loss
+        prev_epoch_loss = epoch_loss'''
 
         print('------------------------------------------------------------')
 
