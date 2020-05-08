@@ -80,10 +80,13 @@ all_file = [f for f in listdir(text_path) if isfile(join(text_path, f))]
 all_file_len = len(all_file)
 vocab_length = len(w2v_model.wv.vocab)
 
-def get_embedding_matrix(w2v_model):
+def get_embedding_matrix(w2v_model, use_norm = True):
     embedding_matrix = np.zeros((len(w2v_model.wv.vocab) + 4, w2v_dim + 4))
     for i in range(len(w2v_model.wv.vocab)):
-        embedding_vector = np.append(w2v_model.wv[w2v_model.wv.index2word[i]], np.zeros(4))
+        vec = w2v_model.wv[w2v_model.wv.index2word[i]]
+        if use_norm:
+            vec = vec / np.linalg.norm(vec)
+        embedding_vector = np.append(vec, np.zeros(4))
         if embedding_vector is not None:
             embedding_matrix[i] = embedding_vector
 
